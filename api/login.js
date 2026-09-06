@@ -31,12 +31,11 @@ export default async function handler(req, res) {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // Look for matching user and hashed password
+  // Look for user by username
   const { data, error } = await supabase
     .from('app_users')
-    .select('id, username')
+    .select('id, username, password')
     .eq('username', cleanUsername)
-    .eq('password', hashedPassword)
     .maybeSingle();
 
   if (error) {
@@ -45,6 +44,25 @@ export default async function handler(req, res) {
 
   if (!data) {
     return res.status(400).json({ error: 'Invalid username or password.' });
+  }
+
+  // Support both secure hash and legacy plaintext passwords
+  const isMatch = (data.password === hashedPassword) || (data.password === password);
+
+  if (!isMatch) {
+    return res.status(400).json({ error: 'Invalid username or password.' });
+  }
+
+  // If password was stored in plaintext, seamlessly upgrade it to hashed!
+  if (data.password === password) {
+    try {
+      await supabase
+        .from('app_users')
+        .update({ password: hashedPassword })
+        .eq('id', data.id);
+    } catch (e) {
+      // Non-blocking upgrade
+    }
   }
 
   return res.status(200).json({ data: data.id });
