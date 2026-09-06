@@ -8,6 +8,7 @@
   import SavingsView from './lib/components/SavingsView.svelte'
   import ProfileView from './lib/components/ProfileView.svelte'
   import AddModal from './lib/components/AddModal.svelte'
+  import AuthView from './lib/components/AuthView.svelte'
 
   // Application State
   const APP_VERSION = 'v1.1.0'
@@ -18,11 +19,12 @@
   let deferredPrompt = $state(null)
   let isInstalled = $state(false)
   let isDismissed = $state(false)
+  let session = $state(null)
 
   // Floating bubble shows if not in standalone/installed mode and user hasn't hit dismiss in this session
-  let showInstallBubble = $derived(!isInstalled && !isDismissed)
+  let showInstallBubble = $derived(!isInstalled && !isDismissed && appLoaded && session)
 
-  // Trigger splash screen hero animation after loading
+  // Trigger splash screen hero animation after loading and check custom API session
   $effect(() => {
     // Check if running as installed standalone PWA app
     if (typeof window !== 'undefined') {
@@ -34,9 +36,16 @@
       }
     }
 
+    // Check our custom local API session
+    const userId = localStorage.getItem('allowance_user_id')
+    if (userId) {
+      session = userId
+    }
+
     const timer = setTimeout(() => {
       appLoaded = true
     }, 1800)
+    
     return () => clearTimeout(timer)
   })
 
@@ -63,7 +72,6 @@
 
   async function handleInstallPWA() {
     if (!deferredPrompt) {
-      // If browser doesn't support beforeinstallprompt or on iOS
       alert('To install this app on your device:\n\n• On iOS (Safari): Tap the Share button (square with arrow up), then select "Add to Home Screen".\n• On Android/Chrome: Tap the 3 dots menu and select "Install app" or "Add to Home screen".\n• On Desktop: Click the install icon in your address bar.')
       return
     }
@@ -111,22 +119,26 @@
   <!-- Responsive Viewport Frame -->
   <div class="relative w-full max-w-2xl h-full flex flex-col justify-between">
     
-    <!-- Hero Animated Logo (Seamlessly flies from center to top-left) -->
+    <!-- Hero Animated Logo (Seamlessly flies from center to top-left if logged in, stays if logging in) -->
     <div 
-      class="absolute z-[110] transition-all duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] flex items-center justify-center {appLoaded ? 'top-4 left-6 w-10 h-10 translate-x-0 translate-y-0' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48'}"
+      class="absolute z-[110] transition-all duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] flex items-center justify-center {appLoaded && session ? 'top-4 left-6 w-10 h-10 translate-x-0 translate-y-0' : 'top-[15%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 opacity-0 pointer-events-none'}"
     >
       <img src="/Logo.png" alt="Ctrl+Savings Logo" class="w-full h-full object-contain" />
     </div>
-    
-    <!-- Top Mobile App Bar (With proper theme contrast) -->
-    <TopBar
-      {theme}
-      onMenu={() => alert('Menu')}
-      onNotifications={() => alert('Notifications')}
-    />
 
-    <!-- Scrollable Main Content with generous bottom padding so cards never get clipped by nav -->
-    <div class="flex-1 overflow-y-auto overflow-x-hidden min-w-0 pb-36">
+    {#if appLoaded && !session}
+      <AuthView {theme} />
+    {:else if session}
+      
+      <!-- Top Mobile App Bar (With proper theme contrast) -->
+      <TopBar
+        {theme}
+        onMenu={() => alert('Menu')}
+        onNotifications={() => alert('Notifications')}
+      />
+
+      <!-- Scrollable Main Content with generous bottom padding so cards never get clipped by nav -->
+      <div class="flex-1 overflow-y-auto overflow-x-hidden min-w-0 pb-36">
 
       {#if activeTab === 'home'}
         <!-- Screen 1 & 2: Budget Overview & Dashboard -->
@@ -135,14 +147,9 @@
           <!-- Category Header: High-contrast white on dark, deep green on light (NO artificial DARK box!) -->
           <div class="px-6 pt-1 flex items-center justify-between">
             <div>
-              <div class="flex items-center gap-2">
-                <span class="text-[11px] font-semibold tracking-tight block {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/70'}">
-                  Monthly Budget
-                </span>
-                <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full border {theme === 'dark' ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-emerald-100/90 border-emerald-300 text-[#0a4733]'}">
-                  {APP_VERSION}
-                </span>
-              </div>
+              <span class="text-[11px] font-semibold tracking-tight block {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/70'}">
+                Monthly Budget
+              </span>
               <h2 class="text-2xl font-black tracking-tight leading-tight {theme === 'dark' ? 'text-white' : 'text-[#0a4733]'}">
                 Groceries
               </h2>
@@ -341,11 +348,16 @@
             {/if}
           </div>
 
-          <!-- App details -->
+          <!-- App details & Version -->
           <div class="w-full border rounded-lg p-3.5 flex items-center justify-between {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'}">
             <div>
-              <div class="text-xs font-bold">Ctrl+Savings App</div>
-              <p class="text-[11px] {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">Version 1.0.0 (Prelim Release)</p>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold">Ctrl+Savings App</span>
+                <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full border {theme === 'dark' ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-emerald-100/90 border-emerald-300 text-[#0a4733]'}">
+                  {APP_VERSION}
+                </span>
+              </div>
+              <p class="text-[11px] {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">Prelim Release (Project-Based Learning)</p>
             </div>
             <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded border {theme === 'dark' ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-400' : 'bg-emerald-50 border-emerald-300 text-[#0a4733]'}">
               PBL PASSED
@@ -356,20 +368,24 @@
 
     </div>
 
-    <!-- The Floating Bottom Navigation Bar (Centered FAB and perfectly aligned Home, Savings, Profile) -->
-    <BottomNav
-      {activeTab}
-      {theme}
-      onTabChange={(tab) => activeTab = tab}
-      onAddClick={() => isAddModalOpen = true}
-    />
+    {/if}
 
-    <!-- Quick Add Modal -->
-    <AddModal
-      isOpen={isAddModalOpen}
-      onClose={() => isAddModalOpen = false}
-      onAdd={handleAddExpense}
-    />
+    {#if session}
+      <!-- The Floating Bottom Navigation Bar (Centered FAB and perfectly aligned Home, Savings, Profile) -->
+      <BottomNav
+        {activeTab}
+        {theme}
+        onTabChange={(tab) => activeTab = tab}
+        onAddClick={() => isAddModalOpen = true}
+      />
+
+      <!-- Quick Add Modal -->
+      <AddModal
+        isOpen={isAddModalOpen}
+        onClose={() => isAddModalOpen = false}
+        onAdd={handleAddExpense}
+      />
+    {/if}
 
     <!-- Floating PWA Install Bubble (Appears on the side/bottom-right above BottomNav when not installed) -->
     {#if showInstallBubble}

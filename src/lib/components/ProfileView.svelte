@@ -89,5 +89,22 @@
         PWA READY
       </span>
     </div>
+
+    <!-- Sign Out Button -->
+    <button
+      onclick={() => {
+        localStorage.removeItem('allowance_user_id');
+        localStorage.removeItem('allowance_username');
+        window.location.reload();
+      }}
+      class="w-full mt-4 border rounded-lg p-3.5 flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer {theme === 'dark' ? 'bg-[#121215] border-red-900/50 text-red-500 hover:bg-red-950/30' : 'bg-white border-red-200 text-red-600 hover:bg-red-50'}"
+    >
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+      <span class="text-sm font-bold">Sign Out</span>
+    </button>
   </div>
 </div>
