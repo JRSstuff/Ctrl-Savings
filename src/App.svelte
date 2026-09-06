@@ -10,18 +10,70 @@
   import AddModal from './lib/components/AddModal.svelte'
 
   // Application State
+  const APP_VERSION = 'v1.1.0'
   let appLoaded = $state(false)
   let activeTab = $state('home') // 'home', 'savings', 'profile', 'settings'
   let theme = $state('light') // Default to clean light theme matching the reference design
   let isAddModalOpen = $state(false)
+  let deferredPrompt = $state(null)
+  let isInstalled = $state(false)
+  let isDismissed = $state(false)
 
-  // Trigger splash screen hero animation after a cool loading duration
+  // Floating bubble shows if not in standalone/installed mode and user hasn't hit dismiss in this session
+  let showInstallBubble = $derived(!isInstalled && !isDismissed)
+
+  // Trigger splash screen hero animation after loading
   $effect(() => {
+    // Check if running as installed standalone PWA app
+    if (typeof window !== 'undefined') {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                           window.navigator.standalone === true ||
+                           document.referrer.includes('android-app://')
+      if (isStandalone) {
+        isInstalled = true
+      }
+    }
+
     const timer = setTimeout(() => {
       appLoaded = true
     }, 1800)
     return () => clearTimeout(timer)
   })
+
+  // Listen for PWA installation prompt event
+  $effect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault()
+      deferredPrompt = e
+    }
+
+    const handleAppInstalled = () => {
+      isInstalled = true
+      deferredPrompt = null
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+    }
+  })
+
+  async function handleInstallPWA() {
+    if (!deferredPrompt) {
+      // If browser doesn't support beforeinstallprompt or on iOS
+      alert('To install this app on your device:\n\n• On iOS (Safari): Tap the Share button (square with arrow up), then select "Add to Home Screen".\n• On Android/Chrome: Tap the 3 dots menu and select "Install app" or "Add to Home screen".\n• On Desktop: Click the install icon in your address bar.')
+      return
+    }
+    deferredPrompt.prompt()
+    const { outcome } = await deferredPrompt.userChoice
+    if (outcome === 'accepted') {
+      isInstalled = true
+    }
+    deferredPrompt = null
+  }
 
   // Budget & Transactions State
   let totalBudget = $state(980.00)
@@ -83,9 +135,14 @@
           <!-- Category Header: High-contrast white on dark, deep green on light (NO artificial DARK box!) -->
           <div class="px-6 pt-1 flex items-center justify-between">
             <div>
-              <span class="text-[11px] font-semibold tracking-tight block {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/70'}">
-                Monthly Budget
-              </span>
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] font-semibold tracking-tight block {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/70'}">
+                  Monthly Budget
+                </span>
+                <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full border {theme === 'dark' ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-emerald-100/90 border-emerald-300 text-[#0a4733]'}">
+                  {APP_VERSION}
+                </span>
+              </div>
               <h2 class="text-2xl font-black tracking-tight leading-tight {theme === 'dark' ? 'text-white' : 'text-[#0a4733]'}">
                 Groceries
               </h2>
@@ -249,6 +306,41 @@
             </div>
           </div>
 
+          <!-- Install PWA App Shortcut Card -->
+          <div class="w-full border rounded-xl p-4 flex flex-col gap-3 transition-colors {theme === 'dark' ? 'bg-[#121215] border-zinc-800' : 'bg-white border-zinc-200'}">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-sm font-extrabold tracking-tight {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">Install Ctrl+Savings</h4>
+                <p class="text-xs {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">Add to Home Screen as a native app shortcut</p>
+              </div>
+              <div class="w-8 h-8 rounded-full flex items-center justify-center {theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-[#0a4733]'}">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </div>
+            </div>
+
+            {#if isInstalled}
+              <div class="w-full py-2 px-3 rounded-lg text-xs font-bold text-center border {theme === 'dark' ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400' : 'bg-emerald-50 border-emerald-300 text-emerald-800'}">
+                ✓ App Already Installed on this Device
+              </div>
+            {:else}
+              <button
+                onclick={handleInstallPWA}
+                class="cursor-pointer w-full py-2.5 px-4 rounded-lg font-bold text-xs flex items-center justify-center gap-2 active:scale-98 transition-all shadow-md {theme === 'dark' ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'bg-[#0a4733] text-white hover:bg-[#0d5940]'}"
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M12 2v10" />
+                  <path d="M17 7l-5 5-5-5" />
+                  <rect x="4" y="14" width="16" height="8" rx="2" />
+                </svg>
+                <span>Download & Install App</span>
+              </button>
+            {/if}
+          </div>
+
           <!-- App details -->
           <div class="w-full border rounded-lg p-3.5 flex items-center justify-between {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'}">
             <div>
@@ -278,6 +370,48 @@
       onClose={() => isAddModalOpen = false}
       onAdd={handleAddExpense}
     />
+
+    <!-- Floating PWA Install Bubble (Appears on the side/bottom-right above BottomNav when not installed) -->
+    {#if showInstallBubble}
+      <aside
+        transition:fly={{ y: 24, duration: 400, easing: cubicOut }}
+        class="pointer-events-auto absolute bottom-22 right-4 left-4 sm:left-auto sm:right-6 sm:w-80 z-40 p-3.5 rounded-2xl shadow-2xl border backdrop-blur-md flex flex-col gap-2.5 {theme === 'dark' ? 'bg-[#121215]/95 border-emerald-900/60 text-white shadow-emerald-950/20' : 'bg-white/95 border-emerald-200/90 text-zinc-900 shadow-emerald-900/10'}"
+        aria-label="Install App Prompt"
+      >
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center p-1 {theme === 'dark' ? 'bg-zinc-900 border border-zinc-800' : 'bg-emerald-50 border border-emerald-100'}">
+            <img src="/Logo.png" alt="Logo" class="w-full h-full object-contain" />
+          </div>
+          <div class="flex-1 min-w-0 pr-1">
+            <div class="flex items-center justify-between">
+              <h5 class="text-xs font-black tracking-tight leading-tight {theme === 'dark' ? 'text-white' : 'text-[#0a4733]'}">Install Ctrl+Savings</h5>
+              <span class="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded {theme === 'dark' ? 'bg-emerald-950 border border-emerald-500/40 text-emerald-400' : 'bg-emerald-100 text-[#0a4733]'}">PWA</span>
+            </div>
+            <p class="text-[11px] leading-snug mt-0.5 {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}">Add to home screen for faster zero-lag offline access.</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-1 border-t {theme === 'dark' ? 'border-zinc-800/80' : 'border-emerald-100'}">
+          <button
+            onclick={() => isDismissed = true}
+            class="cursor-pointer flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-colors text-center {theme === 'dark' ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100'}"
+          >
+            Dismiss
+          </button>
+          <button
+            onclick={handleInstallPWA}
+            class="cursor-pointer flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all active:scale-95 shadow-xs flex items-center justify-center gap-1.5 {theme === 'dark' ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'bg-[#0a4733] text-white hover:bg-[#0d5940]'}"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 2v10" />
+              <path d="M17 7l-5 5-5-5" />
+              <rect x="4" y="14" width="16" height="8" rx="2" />
+            </svg>
+            <span>Install</span>
+          </button>
+        </div>
+      </aside>
+    {/if}
 
   </div>
 </div>
