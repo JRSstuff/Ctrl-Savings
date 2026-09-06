@@ -22,15 +22,26 @@
     </div>
   </div>
 
-  <!-- Profile Card -->
-  <div class="w-full border rounded-xl p-4 shadow-xs flex items-center gap-3 mt-2 {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'}">
-    <div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg {theme === 'dark' ? 'bg-emerald-500 text-black' : 'bg-[#0a4733] text-white'}">
-      B
+  <!-- Profile & Developer Credit Card -->
+  <div class="w-full border rounded-xl p-4 shadow-xs flex items-center gap-3.5 mt-2 {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'}">
+    <div class="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg shrink-0 {theme === 'dark' ? 'bg-emerald-500 text-black' : 'bg-[#0a4733] text-white'}">
+      JS
     </div>
     <div class="flex-1 min-w-0">
-      <h3 class="text-base font-bold truncate {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">Allowance User</h3>
-      <p class="text-xs font-mono {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">Monthly Budget: $980.00</p>
+      <div class="flex items-center gap-1.5">
+        <h3 class="text-base font-black tracking-tight truncate {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">Justine Roy P. Salvador</h3>
+      </div>
+      <p class="text-xs font-semibold {theme === 'dark' ? 'text-emerald-400' : 'text-[#0a4733]'}">Computer Science Student • USTP</p>
+      <p class="text-[11px] font-mono mt-0.5 {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">CS111 Intro to Computing Prelims</p>
     </div>
+  </div>
+
+  <!-- Academic Project Badge -->
+  <div class="w-full border rounded-lg p-3 flex flex-col gap-1 {theme === 'dark' ? 'bg-[#121215] border-zinc-800' : 'bg-emerald-50/70 border-emerald-200/60'}">
+    <span class="text-[10px] font-bold uppercase tracking-wider {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/80'}">Project-Based Learning (PBL)</span>
+    <p class="text-xs {theme === 'dark' ? 'text-zinc-300' : 'text-[#0a4733]'}">
+      Developed as a Project-Based Learning initiative to fulfill the course requirements for <strong>CS111: Introduction to Computing (Prelims)</strong> at the University of Science and Technology of Southern Philippines (USTP).
+    </p>
   </div>
 
   <!-- Settings / System Status -->

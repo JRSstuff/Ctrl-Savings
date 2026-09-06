@@ -9,6 +9,14 @@ A zero-lag, offline-first allowance and savings tracker built for a seamless, na
 - **High-Contrast Design**: Carefully engineered Tailwind CSS palette avoiding low-contrast gradients and relying on crisp Green+Black and Green+White aesthetics.
 - **Fully Responsive**: Instead of fixed dimensions, it locks to the viewport height (`100dvh`), scales beautifully up to `max-w-2xl` on desktops, and perfectly aligns navigation tools dynamically.
 
+## Developer & Academic Credit
+
+- **Developer**: **Justine Roy P. Salvador**
+- **Program**: Computer Science Student
+- **Institution**: University of Science and Technology of Southern Philippines (**USTP**)
+- **Subject / Course**: **CS111 - Introduction to Computing**
+- **Purpose**: Developed for Project-Based Learning (PBL) to pass the **Prelims Examination**.
+
 ## Tech Stack
 
 - **Frontend**: Svelte 5 + Vite
