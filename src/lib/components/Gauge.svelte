@@ -1,13 +1,13 @@
 <script>
   let {
-    available = 215.60,
-    total = 980.00,
-    unit = '$',
+    available = 0.00,
+    total = 0.00,
+    unit = '₱',
     theme = 'light'
   } = $props()
 
   // Calculate percentage for circular progress
-  let percentage = $derived(Math.min(100, Math.max(0, (available / total) * 100)))
+  let percentage = $derived(total === 0 ? 0 : Math.min(100, Math.max(0, (available / total) * 100)))
   
   // SVG circular gauge geometry
   const radius = 88
@@ -56,8 +56,14 @@
       <span class="text-4xl sm:text-5xl">{integerPart}</span>
       <span class="text-xl sm:text-2xl font-bold">.{decimalPart}</span>
     </div>
-    <p class="text-xs font-semibold mt-2 tracking-tight {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/85'}">
-      available out of {unit}{formattedTotal}
-    </p>
+    {#if total > 0}
+      <p class="text-xs font-semibold mt-2 tracking-tight {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/85'}">
+        available out of {unit}{formattedTotal}
+      </p>
+    {:else}
+      <p class="text-xs font-semibold mt-2 tracking-tight {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/85'}">
+        Available Cash
+      </p>
+    {/if}
   </div>
 </div>

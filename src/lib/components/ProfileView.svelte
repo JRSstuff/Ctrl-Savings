@@ -1,54 +1,135 @@
 <script>
-  let { theme = 'light', onToggleTheme = () => {}, onBack = () => {} } = $props()
+  import { fade, slide } from 'svelte/transition'
+  import { cubicOut } from 'svelte/easing'
+
+  let { theme = 'light', session = null, onToggleTheme = () => {}, onBack = () => {} } = $props()
+
+  let firstName = $state(localStorage.getItem('allowance_firstname') || 'User')
+  let lastName = $state(localStorage.getItem('allowance_lastname') || '')
+  let middleName = $state(localStorage.getItem('allowance_middlename') || '')
+  let dob = $state(localStorage.getItem('allowance_dob') || 'Not Set')
+  let initials = $state('U')
+  let profileError = $state('')
+  let loading = $state(false)
+  
+  let showCreditsModal = $state(false)
+
+  async function loadProfile() {
+    const uid = session || localStorage.getItem('allowance_user_id')
+    if (!uid || uid === 'undefined' || uid === 'null') {
+      profileError = 'Session is invalid or missing user ID. Please sign out and log in again.'
+      return
+    }
+
+    loading = true
+    profileError = ''
+
+    try {
+      const res = await fetch('/api/user', {
+        headers: { 'x-user-id': uid }
+      })
+      const result = await res.json()
+      if (!res.ok) {
+        profileError = result.error || 'Failed to retrieve profile information.'
+      } else if (result.data) {
+        firstName = result.data.first_name || result.data.username || 'User'
+        lastName = result.data.last_name || ''
+        middleName = result.data.middle_name || ''
+        dob = result.data.date_of_birth || 'Not Set'
+
+        localStorage.setItem('allowance_firstname', firstName)
+        localStorage.setItem('allowance_lastname', lastName)
+        localStorage.setItem('allowance_middlename', middleName)
+        localStorage.setItem('allowance_dob', dob)
+      }
+    } catch (err) {
+      profileError = err.message || 'Network error fetching user profile.'
+    } finally {
+      loading = false
+      initials = ((firstName ? firstName.charAt(0) : 'U') + (lastName ? lastName.charAt(0) : '')).toUpperCase()
+    }
+  }
+
+  $effect(() => {
+    loadProfile()
+  })
 </script>
 
 <div class="w-full flex flex-col gap-4 px-6 pb-24 animate-in fade-in duration-200">
   <!-- Top Navigation Header -->
-  <div class="flex items-center gap-2 pt-2">
+  <div class="flex items-center justify-between pt-2">
+    <div class="flex items-center gap-2">
+      <button
+        onclick={onBack}
+        aria-label="Back to Home"
+        class="cursor-pointer w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-all {theme === 'dark' ? 'bg-zinc-800 text-white hover:bg-zinc-700' : 'bg-emerald-950/10 text-[#0a4733] hover:bg-emerald-950/20'}"
+      >
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <div>
+        <span class="text-[11px] font-semibold block {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/75'}">Account</span>
+        <h2 class="text-xl font-extrabold tracking-tight leading-none {theme === 'dark' ? 'text-white' : 'text-[#0a4733]'}">
+          Profile
+        </h2>
+      </div>
+    </div>
+    
+    <!-- Credits / Info Button -->
     <button
-      onclick={onBack}
-      aria-label="Back to Home"
-      class="cursor-pointer w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-all {theme === 'dark' ? 'bg-zinc-800 text-white hover:bg-zinc-700' : 'bg-emerald-950/10 text-[#0a4733] hover:bg-emerald-950/20'}"
+      onclick={() => showCreditsModal = true}
+      aria-label="About this app"
+      class="cursor-pointer w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-all {theme === 'dark' ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900'}"
     >
       <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <polyline points="15 18 9 12 15 6"></polyline>
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
       </svg>
     </button>
-    <div>
-      <span class="text-[11px] font-semibold block {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/75'}">Account</span>
-      <h2 class="text-xl font-extrabold tracking-tight leading-none {theme === 'dark' ? 'text-white' : 'text-[#0a4733]'}">
-        Profile
-      </h2>
-    </div>
   </div>
 
-  <!-- Profile & Developer Credit Card -->
+  {#if profileError}
+    <div class="w-full p-3 rounded-lg border bg-red-500/10 border-red-500/40 text-red-500 text-xs font-semibold flex items-center justify-between gap-2 mt-1">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 shrink-0 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span>{profileError}</span>
+      </div>
+      <button 
+        onclick={loadProfile}
+        class="underline font-bold hover:opacity-80 shrink-0 cursor-pointer"
+      >
+        Retry
+      </button>
+    </div>
+  {/if}
+
+  <!-- Real User Profile Card -->
   <div class="w-full border rounded-xl p-4 shadow-xs flex items-center gap-3.5 mt-2 {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'}">
-    <div class="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg shrink-0 {theme === 'dark' ? 'bg-emerald-500 text-black' : 'bg-[#0a4733] text-white'}">
-      JS
+    <div class="w-14 h-14 rounded-full flex items-center justify-center font-black text-xl shrink-0 {theme === 'dark' ? 'bg-emerald-500 text-black' : 'bg-[#0a4733] text-white'}">
+      {initials}
     </div>
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-1.5">
-        <h3 class="text-base font-black tracking-tight truncate {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">Justine Roy P. Salvador</h3>
+        <h3 class="text-lg font-black tracking-tight truncate {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">
+          {firstName} {middleName ? middleName.charAt(0) + '.' : ''} {lastName}
+        </h3>
       </div>
-      <p class="text-xs font-semibold {theme === 'dark' ? 'text-emerald-400' : 'text-[#0a4733]'}">Computer Science Student • USTP</p>
-      <p class="text-[11px] font-mono mt-0.5 {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">CS111 Intro to Computing Prelims</p>
+      <p class="text-xs font-semibold {theme === 'dark' ? 'text-emerald-400' : 'text-[#0a4733]'}">Allowance Account</p>
+      <p class="text-[11px] font-mono mt-0.5 {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">DOB: {dob}</p>
     </div>
-  </div>
-
-  <!-- Academic Project Badge -->
-  <div class="w-full border rounded-lg p-3 flex flex-col gap-1 {theme === 'dark' ? 'bg-[#121215] border-zinc-800' : 'bg-emerald-50/70 border-emerald-200/60'}">
-    <span class="text-[10px] font-bold uppercase tracking-wider {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/80'}">Project-Based Learning (PBL)</span>
-    <p class="text-xs {theme === 'dark' ? 'text-zinc-300' : 'text-[#0a4733]'}">
-      Developed as a Project-Based Learning initiative to fulfill the course requirements for <strong>CS111: Introduction to Computing (Prelims)</strong> at the University of Science and Technology of Southern Philippines (USTP).
-    </p>
   </div>
 
   <!-- Settings / System Status -->
   <div class="flex flex-col gap-2 pt-2">
     <span class="text-xs font-bold uppercase tracking-wider {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">Preferences</span>
 
-    <!-- Theme Toggle (Clean, inside Profile settings, not cluttering the header) -->
+    <!-- Theme Toggle -->
     <div class="w-full border rounded-lg p-3.5 flex items-center justify-between shadow-xs {theme === 'dark' ? 'bg-[#121215] border-zinc-800' : 'bg-white border-zinc-200'}">
       <div>
         <div class="text-sm font-bold {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">Color Theme</div>
@@ -93,8 +174,7 @@
     <!-- Sign Out Button -->
     <button
       onclick={() => {
-        localStorage.removeItem('allowance_user_id');
-        localStorage.removeItem('allowance_username');
+        localStorage.clear(); // Clear all saved info completely on sign out
         window.location.reload();
       }}
       class="w-full mt-4 border rounded-lg p-3.5 flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer {theme === 'dark' ? 'bg-[#121215] border-red-900/50 text-red-500 hover:bg-red-950/30' : 'bg-white border-red-200 text-red-600 hover:bg-red-50'}"
@@ -108,3 +188,57 @@
     </button>
   </div>
 </div>
+
+<!-- Credits Modal -->
+{#if showCreditsModal}
+  <div 
+    class="fixed inset-0 z-[200] flex items-center justify-center px-4"
+    transition:fade={{ duration: 200, easing: cubicOut }}
+  >
+    <!-- Backdrop -->
+    <button 
+      type="button"
+      aria-label="Close modal backdrop"
+      class="absolute inset-0 w-full h-full cursor-default bg-black/60 backdrop-blur-sm border-none"
+      onclick={() => showCreditsModal = false}
+    ></button>
+
+    <!-- Modal Content -->
+    <div 
+      class="relative w-full max-w-sm rounded-2xl shadow-2xl p-6 flex flex-col gap-4 {theme === 'dark' ? 'bg-[#121215] border border-zinc-800' : 'bg-white border border-zinc-200'}"
+      transition:slide={{ duration: 250, axis: 'y' }}
+    >
+      <div class="flex items-center justify-between border-b pb-3 {theme === 'dark' ? 'border-zinc-800' : 'border-zinc-100'}">
+        <h2 class="text-lg font-black tracking-tight {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">About this App</h2>
+        <button 
+          type="button"
+          aria-label="Close"
+          onclick={() => showCreditsModal = false}
+          class="p-1 rounded-full {theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'}"
+        >
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      
+      <!-- Developer Credit -->
+      <div class="w-full rounded-xl p-4 flex items-center gap-3 mt-2 {theme === 'dark' ? 'bg-zinc-900/50' : 'bg-zinc-50'}">
+        <div class="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg shrink-0 {theme === 'dark' ? 'bg-emerald-500 text-black' : 'bg-[#0a4733] text-white'}">
+          JS
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="text-base font-black tracking-tight truncate {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">Justine Roy P. Salvador</h3>
+          <p class="text-xs font-semibold {theme === 'dark' ? 'text-emerald-400' : 'text-[#0a4733]'}">Computer Science Student • USTP</p>
+          <p class="text-[11px] font-mono mt-0.5 {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">CS111 Intro to Computing Prelims</p>
+        </div>
+      </div>
+
+      <!-- Academic Project Badge -->
+      <div class="w-full rounded-lg p-3 flex flex-col gap-1 {theme === 'dark' ? 'bg-emerald-950/20 border border-emerald-900/50' : 'bg-emerald-50/70 border border-emerald-200/60'}">
+        <span class="text-[10px] font-bold uppercase tracking-wider {theme === 'dark' ? 'text-emerald-500' : 'text-[#0a4733]/80'}">Project-Based Learning (PBL)</span>
+        <p class="text-xs {theme === 'dark' ? 'text-zinc-300' : 'text-[#0a4733]'}">
+          Developed as a Project-Based Learning initiative to fulfill the course requirements for <strong>CS111: Introduction to Computing (Prelims)</strong> at the University of Science and Technology of Southern Philippines (USTP).
+        </p>
+      </div>
+    </div>
+  </div>
+{/if}

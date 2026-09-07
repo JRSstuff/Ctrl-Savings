@@ -28,17 +28,17 @@
         <span class="text-[10px] font-bold tracking-tight leading-none">Home</span>
       </button>
 
-      <!-- 2. Savings -->
+      <!-- 2. Chatbot -->
       <button
-        onclick={() => onTabChange('savings')}
-        class="cursor-pointer flex flex-col items-center justify-center gap-1 transition-all active:scale-95 {activeTab === 'savings' ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'}"
+        onclick={() => onTabChange('chatbot')}
+        class="cursor-pointer flex flex-col items-center justify-center gap-1 transition-all active:scale-95 {activeTab === 'chatbot' ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'}"
       >
         <div class="w-6 h-6 flex items-center justify-center">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19.5 9.5c-.3 0-.6.1-.9.2C17.9 8.1 16.5 7 15 7h-5c-1.4 0-2.6.9-3.3 2.1-.4-.1-.7-.1-1.2-.1-2.2 0-4 1.8-4 4 0 1.9 1.3 3.5 3.1 3.9.5 2.3 2.6 4.1 5.1 4.1h.3l1-2h4l1 2h.3c2.6 0 4.7-1.9 5.1-4.3 1.9-.3 3.3-2 3.3-4 0-1.8-1.5-3.2-3.3-3.2zm-6.5-1c.6 0 1 .4 1 1s-.4 1-1 1-1-.4-1-1 .4-1 1-1z" />
+            <path d="M12 2a1 1 0 0 1 1 1v1.07A7.002 7.002 0 0 1 19 11v5a3 3 0 0 1-3 3h-1.1l-2.4 2.4a1 1 0 0 1-1.42 0L8.68 19H7a3 3 0 0 1-3-3v-5a7.002 7.002 0 0 1 6-6.93V3a1 1 0 0 1 1-1zm-3.5 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" />
           </svg>
         </div>
-        <span class="text-[10px] font-bold tracking-tight leading-none">Savings</span>
+        <span class="text-[10px] font-bold tracking-tight leading-none">Chatbot</span>
       </button>
 
       <!-- 3. Plus Icon (Elevated above the bar, Dead Center) -->

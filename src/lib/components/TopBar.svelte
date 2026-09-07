@@ -1,21 +1,19 @@
 <script>
-  let { theme = 'light', onMenu = () => {}, onNotifications = () => {} } = $props()
+  let { theme = 'light', onOpenSessions = () => {}, activeSessionName = 'Current Cycle' } = $props()
 </script>
 
 <header class="w-full flex items-center justify-between px-6 pt-4 pb-2">
-  <!-- Invisible placeholder for the Logo which is now globally animated in App.svelte -->
+  <!-- Invisible placeholder for the Logo which is globally animated in App.svelte -->
   <div class="w-10 h-10"></div>
 
-  <!-- Notification Bell with Alert Dot -->
+  <!-- Allowance Cycles Switcher Button -->
   <button
-    onclick={onNotifications}
-    aria-label="Notifications"
-    class="cursor-pointer relative p-1.5 -mr-1.5 rounded-md transition-all active:scale-95 {theme === 'dark' ? 'text-white hover:bg-zinc-800' : 'text-[#0a4733] hover:bg-emerald-900/10'}"
+    onclick={onOpenSessions}
+    aria-label="Cycles"
+    class="cursor-pointer flex items-center gap-1.5 py-1.5 px-3 rounded-full border shadow-xs transition-all active:scale-95 {theme === 'dark' ? 'bg-[#18181b] border-zinc-700 hover:border-zinc-500 text-white' : 'bg-white border-zinc-300 hover:border-zinc-400 text-[#0a4733]'}"
+    title="Cycles"
   >
-    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
-    </svg>
-    <!-- Notification indicator badge -->
-    <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#22c55e] ring-2 {theme === 'dark' ? 'ring-[#09090b]' : 'ring-white'}"></span>
+    <span class="text-sm">📁</span>
+    <span class="text-xs font-black tracking-tight max-w-[130px] truncate">{activeSessionName || 'Cycle'}</span>
   </button>
 </header>

@@ -20,10 +20,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server configuration error: Database keys not configured in environment variables.' });
   }
 
-  const { username, password } = req.body || {};
+  const { username, password, firstName, middleName, lastName, dateOfBirth } = req.body || {};
 
   if (!username || typeof username !== 'string' || !password || typeof password !== 'string') {
     return res.status(400).json({ error: 'Username and password are required.' });
+  }
+
+  if (!firstName || !lastName || !dateOfBirth) {
+    return res.status(400).json({ error: 'First name, last name, and date of birth are required.' });
   }
 
   // Sanitize and validate username
@@ -63,13 +67,20 @@ export default async function handler(req, res) {
 
   const { data, error: insertError } = await supabase
     .from('app_users')
-    .insert({ username: cleanUsername, password: hashedPassword })
-    .select('id')
+    .insert({ 
+      username: cleanUsername, 
+      password: hashedPassword,
+      first_name: firstName.trim(),
+      middle_name: middleName ? middleName.trim() : null,
+      last_name: lastName.trim(),
+      date_of_birth: dateOfBirth
+    })
+    .select('id, first_name, last_name, middle_name, date_of_birth')
     .single();
 
   if (insertError) {
     return res.status(400).json({ error: insertError.message });
   }
 
-  return res.status(200).json({ data: data.id });
+  return res.status(200).json({ data });
 }

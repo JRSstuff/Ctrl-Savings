@@ -34,7 +34,7 @@ export default async function handler(req, res) {
   // Look for user by username
   const { data, error } = await supabase
     .from('app_users')
-    .select('id, username, password')
+    .select('id, username, password, first_name, last_name, middle_name, date_of_birth, total_budget, available_budget')
     .eq('username', cleanUsername)
     .maybeSingle();
 
@@ -65,5 +65,8 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.status(200).json({ data: data.id });
+  // Don't send the password hash back to the client
+  delete data.password;
+
+  return res.status(200).json({ data });
 }

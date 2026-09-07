@@ -5,9 +5,12 @@ A zero-lag, offline-first allowance and savings tracker built for a seamless, na
 ## Features
 
 - **Offline-First (PWA)**: Hard-caches assets using Workbox and Vite PWA. It works completely offline and is fully installable on iOS, Android, and Desktop.
-- **Hero Animations**: Beautiful, addicting shared-element UI transitions when launching the app.
+- **AI Financial Assistant (Ctrl+Advisor)**: Powered by Google Gemini 3.6 Flash. Understands natural language, batch-logs compound financial events, protects against overspending with interactive budget confirmation cards, and provides instant zero-token balance readouts.
+- **Allowance Cycles & Sessions**: Full multi-cycle allowance periods persisted in Supabase PostgreSQL with customizable savings goals and target progress tracking.
+- **Zero-Gatekeeping Error System**: High-priority on-screen alerts rendering exact HTTP and database status codes for complete operational transparency.
+- **Hero Animations**: Smooth shared-element UI transitions when launching the app.
 - **High-Contrast Design**: Carefully engineered Tailwind CSS palette avoiding low-contrast gradients and relying on crisp Green+Black and Green+White aesthetics.
-- **Fully Responsive**: Instead of fixed dimensions, it locks to the viewport height (`100dvh`), scales beautifully up to `max-w-2xl` on desktops, and perfectly aligns navigation tools dynamically.
+- **Fully Responsive**: Locks to the viewport height (`100dvh`), scales beautifully up to `max-w-2xl` on desktops, and dynamically centers all navigation tools.
 
 ## Developer & Academic Credit
 
@@ -22,6 +25,9 @@ A zero-lag, offline-first allowance and savings tracker built for a seamless, na
 - **Frontend**: Svelte 5 + Vite
 - **Styling**: Tailwind CSS v4
 - **PWA**: vite-plugin-pwa (Auto-update, Offline Caching)
+- **Backend**: Vercel Serverless Functions (`api/`)
+- **Database**: Supabase PostgreSQL
+- **AI**: Google Gemini 3.6 Flash (`generativelanguage.googleapis.com`)
 - **Deployment**: Ready for Vercel
 
 ## Local Development

@@ -1,11 +1,18 @@
 <script>
-  let { theme = 'light' } = $props()
+  let { theme = 'light', onSuccess } = $props()
   
   let mode = $state('login') // 'login' or 'register'
   
   let username = $state('')
   let password = $state('')
   let confirmPassword = $state('')
+  
+  // New Registration Fields
+  let firstName = $state('')
+  let middleName = $state('')
+  let lastName = $state('')
+  let dateOfBirth = $state('')
+
   let loading = $state(false)
   let errorMessage = $state('')
 
@@ -18,9 +25,15 @@
       return
     }
 
-    if (mode === 'register' && password !== confirmPassword) {
-      errorMessage = 'Passwords do not match.'
-      return
+    if (mode === 'register') {
+      if (password !== confirmPassword) {
+        errorMessage = 'Passwords do not match.'
+        return
+      }
+      if (!firstName || !lastName || !dateOfBirth) {
+        errorMessage = 'First name, last name, and date of birth are required.'
+        return
+      }
     }
 
     loading = true
@@ -30,7 +43,14 @@
         const res = await fetch('/api/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ 
+            username, 
+            password,
+            firstName,
+            middleName,
+            lastName,
+            dateOfBirth
+          })
         })
         
         let result
@@ -47,9 +67,16 @@
             errorMessage = result.error || 'Registration failed.'
           }
         } else if (result.data) {
-          localStorage.setItem('allowance_user_id', result.data)
-          localStorage.setItem('allowance_username', username)
-          window.location.reload()
+          const user = typeof result.data === 'object' && result.data !== null ? result.data : { id: result.data }
+          const uid = user.id || result.data
+          localStorage.setItem('allowance_user_id', uid)
+          localStorage.setItem('allowance_username', user.username || username)
+          localStorage.setItem('allowance_firstname', user.first_name || firstName)
+          localStorage.setItem('allowance_lastname', user.last_name || lastName)
+          localStorage.setItem('allowance_middlename', user.middle_name || middleName)
+          localStorage.setItem('allowance_dob', user.date_of_birth || dateOfBirth)
+          if (onSuccess) onSuccess(user.first_name || firstName)
+          else window.location.reload()
         }
       } catch (err) {
         errorMessage = err.message || 'Network error occurred.'
@@ -74,9 +101,16 @@
         } else if (!result.data) {
           errorMessage = 'Invalid username or password.'
         } else {
-          localStorage.setItem('allowance_user_id', result.data)
-          localStorage.setItem('allowance_username', username)
-          window.location.reload()
+          const user = typeof result.data === 'object' && result.data !== null ? result.data : { id: result.data }
+          const uid = user.id || result.data
+          localStorage.setItem('allowance_user_id', uid)
+          localStorage.setItem('allowance_username', user.username || username)
+          localStorage.setItem('allowance_firstname', user.first_name || '')
+          localStorage.setItem('allowance_lastname', user.last_name || '')
+          localStorage.setItem('allowance_middlename', user.middle_name || '')
+          localStorage.setItem('allowance_dob', user.date_of_birth || '')
+          if (onSuccess) onSuccess(user.first_name || user.username || username)
+          else window.location.reload()
         }
       } catch (err) {
         errorMessage = err.message || 'Network error occurred.'
@@ -124,6 +158,44 @@
           class="w-full pl-12 pr-4 py-4 rounded-xl text-sm font-bold border transition-all outline-none focus:ring-2 {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white focus:ring-emerald-500/50' : 'bg-white border-zinc-200 text-zinc-900 focus:ring-[#0a4733]/20'}"
         />
       </div>
+
+      {#if mode === 'register'}
+        <!-- Name Inputs Group -->
+        <div class="flex gap-2 w-full animate-in slide-in-from-top-2">
+          <input 
+            type="text" 
+            bind:value={firstName}
+            placeholder="First Name" 
+            required
+            class="w-full px-4 py-4 rounded-xl text-sm font-bold border transition-all outline-none focus:ring-2 {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white focus:ring-emerald-500/50' : 'bg-white border-zinc-200 text-zinc-900 focus:ring-[#0a4733]/20'}"
+          />
+          <input 
+            type="text" 
+            bind:value={middleName}
+            placeholder="Middle" 
+            class="w-2/3 px-4 py-4 rounded-xl text-sm font-bold border transition-all outline-none focus:ring-2 {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white focus:ring-emerald-500/50' : 'bg-white border-zinc-200 text-zinc-900 focus:ring-[#0a4733]/20'}"
+          />
+        </div>
+        <div class="w-full animate-in slide-in-from-top-2">
+          <input 
+            type="text" 
+            bind:value={lastName}
+            placeholder="Last Name" 
+            required
+            class="w-full px-4 py-4 rounded-xl text-sm font-bold border transition-all outline-none focus:ring-2 {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white focus:ring-emerald-500/50' : 'bg-white border-zinc-200 text-zinc-900 focus:ring-[#0a4733]/20'}"
+          />
+        </div>
+        
+        <!-- Date of Birth Input -->
+        <div class="w-full animate-in slide-in-from-top-2">
+          <input 
+            type="date" 
+            bind:value={dateOfBirth}
+            required
+            class="w-full px-4 py-4 rounded-xl text-sm font-bold border transition-all outline-none focus:ring-2 {theme === 'dark' ? 'bg-[#121215] border-zinc-800 text-white focus:ring-emerald-500/50' : 'bg-white border-zinc-200 text-zinc-900 focus:ring-[#0a4733]/20'}"
+          />
+        </div>
+      {/if}
 
       <!-- Password Input -->
       <div class="relative w-full">
