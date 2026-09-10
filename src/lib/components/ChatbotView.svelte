@@ -2,6 +2,7 @@
   import { tick } from 'svelte'
   import { fade, fly } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
+  import AppIcon from './AppIcon.svelte'
 
   let {
     theme = 'light',
@@ -10,6 +11,7 @@
     availableBudget = 0,
     totalIncome = 0,
     totalExpense = 0,
+    budgetPeriod = 'weekly',
     selectedSession = null,
     transactions = [],
     onAddTransaction = async () => ({ success: true }),
@@ -22,26 +24,54 @@
   let actionLoadingId = $state(null)
 
   const quickPrompts = [
-    { title: 'Coffee ₱100', icon: '☕', prompt: 'I bought coffee for 100 pesos' },
-    { title: 'Jeepney ₱15', icon: '🚌', prompt: 'Paid 15 pesos for jeepney fare' },
-    { title: 'Check Balance', icon: '💰', prompt: 'What is my current balance?' },
-    { title: 'Stretch My Baon', icon: '💡', prompt: 'How can I stretch my remaining allowance for this cycle?' },
-    { title: 'Spending Analysis', icon: '📊', prompt: 'Analyze my spending habits and tell me where my money is going.' },
-    { title: 'Hit Savings Goal', icon: '🎯', prompt: 'What is the fastest way to achieve my cycle savings goal?' }
+    { title: 'Coffee ₱100', iconName: 'coffee', prompt: 'I bought coffee for 100 pesos' },
+    { title: 'Jeepney ₱15', iconName: 'transport', prompt: 'Paid 15 pesos for jeepney fare' },
+    { title: 'Check Balance', iconName: 'allowance', prompt: 'What is my current balance?' },
+    { title: 'Stretch My Baon', iconName: 'lightbulb', prompt: 'How can I stretch my remaining allowance for this cycle?' },
+    { title: 'Spending Analysis', iconName: 'chart', prompt: 'Analyze my spending habits and tell me where my money is going.' },
+    { title: 'Hit Savings Goal', iconName: 'target', prompt: 'What is the fastest way to achieve my cycle savings goal?' }
   ]
+
+  let chatStorageKey = $derived(`ctrl_savings_chat_${userId || 'guest'}`)
 
   let messages = $state([])
 
+  // Load chat history from localStorage on startup
   $effect(() => {
     if (messages.length === 0) {
-      messages = [
-        {
-          id: 'msg_welcome',
-          role: 'assistant',
-          time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-          text: `Kumusta, ${userName}! 👋 I'm **Ctrl+Advisor**, your personal AI financial coach powered by Gemini.\n\nI have live context of your **${selectedSession?.name || 'Active Cycle'}** with **₱${Number(availableBudget).toFixed(2)}** currently available.\n\n💡 *Tip: You can talk naturally! E.g. "I bought coffee for 100 pesos", "Paid 15 pesos for jeepney", or ask for savings advice.*`
-        }
-      ]
+      let savedMessages = null
+      try {
+        const raw = localStorage.getItem(chatStorageKey)
+        if (raw) savedMessages = JSON.parse(raw)
+      } catch (e) {
+        console.error('Failed to load chat history:', e)
+      }
+
+      if (Array.isArray(savedMessages) && savedMessages.length > 0) {
+        messages = savedMessages
+      } else {
+        messages = [
+          {
+            id: 'msg_welcome',
+            role: 'assistant',
+            time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+            text: `Kumusta, ${userName}! 👋 I'm **Ctrl+Advisor**, your personal AI financial coach powered by Gemini.\n\nI have live context of your **${selectedSession?.name || 'Active Cycle'}** with **₱${Number(availableBudget).toFixed(2)}** currently available for this **${budgetPeriod}** allowance cycle.\n\n💡 *Tip: You can talk naturally! E.g. "I bought coffee for 100 pesos", "Paid 15 pesos for jeepney", or ask for savings advice.*`
+          }
+        ]
+      }
+    }
+  })
+
+  // Persist messages to localStorage whenever changed
+  $effect(() => {
+    if (messages.length > 0) {
+      try {
+        // Keep up to 60 most recent messages locally
+        const toSave = messages.slice(-60)
+        localStorage.setItem(chatStorageKey, JSON.stringify(toSave))
+      } catch (e) {
+        console.error('Failed to save chat history:', e)
+      }
     }
   })
 
@@ -59,6 +89,10 @@
   }
 
   function clearChat() {
+    try {
+      localStorage.removeItem(chatStorageKey)
+    } catch (e) {}
+
     messages = [
       {
         id: 'msg_' + Date.now(),
@@ -89,9 +123,15 @@
     const topCatAmt = sortedCats.length > 0 ? sortedCats[0][1] : 0
 
     if (q.includes('stretch') || q.includes('baon') || q.includes('remaining') || q.includes('last')) {
-      const daily5 = (bal / 5).toFixed(2)
-      const daily7 = (bal / 7).toFixed(2)
-      return `### 💡 Smart Baon Allocation Strategy\n\nWith **₱${bal.toFixed(2)}** remaining in **${cycleName}**, here is your optimized spending breakdown:\n\n* **5-Day School Week**: ₱${daily5} / day\n* **7-Day Full Week**: ₱${daily7} / day\n\n**Quick Hacks to Stretch It:**\n1. **Bring a Water Tumbler**: Avoid buying bottled drinks or iced coffee during class (saves ~₱35-₱80/day).\n2. **Group Meals**: Splitting jeepney fares or buying value meals with friends reduces individual outlay.\n3. **Canteen First**: Campus canteens are almost always 30-50% cheaper than off-campus convenience stores.`
+      if (budgetPeriod === 'monthly') {
+        const weeklyPace = (bal / 4).toFixed(2)
+        const daily30 = (bal / 30).toFixed(2)
+        return `### 💡 Smart Monthly Baon Allocation Strategy\n\nWith **₱${bal.toFixed(2)}** remaining in your **monthly** cycle (${cycleName}):\n\n* **Weekly Target**: ~₱${weeklyPace} / week\n* **Daily Target**: ~₱${daily30} / day (30 days)\n\n**Quick Hacks to Stretch It:**\n1. **Weekly Envelope Method**: Divide remaining baon into 4 equal envelopes or e-wallet pockets.\n2. **Bring a Water Tumbler**: Avoid buying bottled drinks or iced coffee during class (saves ~₱35-₱80/day).\n3. **Canteen First**: Campus canteens are almost always 30-50% cheaper than off-campus convenience stores.`
+      } else {
+        const daily5 = (bal / 5).toFixed(2)
+        const daily7 = (bal / 7).toFixed(2)
+        return `### 💡 Smart Weekly Baon Allocation Strategy\n\nWith **₱${bal.toFixed(2)}** remaining in your **weekly** cycle (${cycleName}):\n\n* **5-Day School Week**: ₱${daily5} / day\n* **7-Day Full Week**: ₱${daily7} / day\n\n**Quick Hacks to Stretch It:**\n1. **Bring a Water Tumbler**: Avoid buying bottled drinks or iced coffee during class (saves ~₱35-₱80/day).\n2. **Group Meals**: Splitting jeepney fares or buying value meals with friends reduces individual outlay.\n3. **Canteen First**: Campus canteens are almost always 30-50% cheaper than off-campus convenience stores.`
+      }
     }
 
     if (q.includes('analyz') || q.includes('habit') || q.includes('where') || q.includes('spending')) {
@@ -112,8 +152,8 @@
     }
 
     if (q.includes('daily') || q.includes('limit') || q.includes('calculate')) {
-      const perDay = (bal / 5).toFixed(2)
-      return `### 📅 Recommended Daily Allowance Cap\n\nBased on your active balance of **₱${bal.toFixed(2)}**:\n\n* **Safe Daily Cap**: **₱${perDay}**\n* **Emergency Cushion**: Keep **₱${(bal * 0.1).toFixed(2)}** (10%) untouched for sudden photocopy, printing, or fare increases.\n\nStick to ₱${perDay} tomorrow and note your transactions right after buying so your circular gauge stays in the green!`
+      const perDay = budgetPeriod === 'monthly' ? (bal / 30).toFixed(2) : (bal / 5).toFixed(2)
+      return `### 📅 Recommended Daily Allowance Cap\n\nBased on your active **${budgetPeriod}** balance of **₱${bal.toFixed(2)}**:\n\n* **Safe Daily Cap**: **₱${perDay}** (${budgetPeriod === 'monthly' ? '30-day month' : '5 school days'})\n* **Emergency Cushion**: Keep **₱${(bal * 0.1).toFixed(2)}** (10%) untouched for sudden photocopy, printing, or fare increases.\n\nStick to ₱${perDay} tomorrow and note your transactions right after buying so your circular gauge stays in the green!`
     }
 
     return `### 🤖 Ctrl+Advisor Insights\n\nGot it, ${userName}! Regarding "${userQuery.trim()}":\n\nAs a student managing allowance, the golden rule is **Pay Yourself First**:\n1. When allowance arrives, immediately stash away 10-20% before touching the rest.\n2. Always track small purchases—₱20 snacks and ₱15 jeepney trips add up faster than big purchases.\n3. Your current wallet has **₱${bal.toFixed(2)}**. Keep logging every transaction to maintain full control of your baon!`
@@ -167,13 +207,33 @@
     isTyping = true
 
     try {
+      // Send last 8 conversation turns as context for consistency
+      const historyPayload = messages
+        .filter(m => !m.isError && m.id !== 'msg_welcome')
+        .slice(-8)
+        .map(m => ({
+          role: m.role,
+          text: m.text
+        }))
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-user-id': userId
         },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({
+          message: text,
+          history: historyPayload,
+          sessionId: selectedSession?.id || '',
+          sessionName: selectedSession?.name || 'Active Cycle',
+          sessionGoalAmount: Number(selectedSession?.goal_amount || selectedSession?.goalAmount || 0),
+          sessionGoalTitle: selectedSession?.goal_title || selectedSession?.goalTitle || '',
+          availableBudget: Number(availableBudget || 0),
+          totalIncome: Number(totalIncome || 0),
+          totalExpense: Number(totalExpense || 0),
+          budgetPeriod: budgetPeriod || 'weekly'
+        })
       })
 
       const data = await res.json().catch(() => ({ error: `HTTP ${res.status}: ${res.statusText}` }))
@@ -193,9 +253,21 @@
 
       // Handle actions
       if (data.action === 'add_transaction') {
-        const txList = Array.isArray(data.transactions)
+        const rawList = Array.isArray(data.transactions)
           ? data.transactions
           : (data.transaction ? [data.transaction] : [])
+
+        // Deduplication safeguard: drop accidental duplicates unless explicitly requested by user
+        const seenKeys = new Set()
+        const txList = rawList.filter(t => {
+          const key = `${t.type}_${t.amount}_${(t.description || '').toLowerCase()}`
+          if (seenKeys.has(key)) {
+            const hasMultiple = /\b(2|3|4|two|three|four|both|pair|twice|double|separate)\b/i.test(text)
+            if (!hasMultiple) return false
+          }
+          seenKeys.add(key)
+          return true
+        })
 
         if (txList.length > 0) {
           if (data.exceedsBudget) {
@@ -240,7 +312,7 @@
             id: 'msg_bot_' + Date.now(),
             role: 'assistant',
             time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-            text: data.reply || 'Here is what I found for your allowance.'
+            text: data.reply || 'No transactions detected.'
           }
           messages = [...messages, botMsg]
         }
@@ -548,7 +620,7 @@
           onclick={() => handleQuickPrompt(qp.prompt)}
           class="cursor-pointer whitespace-nowrap flex items-center gap-1.5 py-1 px-3 rounded-full border text-xs font-semibold shadow-2xs transition-all active:scale-95 hover:border-emerald-500 {theme === 'dark' ? 'bg-[#18181b] border-zinc-800 text-zinc-300 hover:text-white' : 'bg-white border-zinc-200 text-zinc-700 hover:text-[#0a4733]'}"
         >
-          <span>{qp.icon}</span>
+          <AppIcon name={qp.iconName} size={13} />
           <span>{qp.title}</span>
         </button>
       {/each}

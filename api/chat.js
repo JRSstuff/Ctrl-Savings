@@ -18,7 +18,18 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized: User ID is required' });
   }
 
-  const { message } = req.body || {};
+  const {
+    message,
+    history = [],
+    sessionId,
+    sessionName: clientSessionName,
+    availableBudget: clientAvailableBudget,
+    totalIncome: clientTotalIncome,
+    totalExpense: clientTotalExpense,
+    budgetPeriod: clientBudgetPeriod,
+    sessionGoalAmount: clientGoalAmount,
+    sessionGoalTitle: clientGoalTitle
+  } = req.body || {};
   if (!message || !message.trim()) {
     return res.status(400).json({ error: 'Message is required.' });
   }
@@ -28,7 +39,7 @@ export default async function handler(req, res) {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // 1. Fetch user profile, active cycle, and transactions scoped strictly to userId
+  // 1. Fetch user profile, cycles, and transactions scoped strictly to userId
   const [userRes, cyclesRes, txsRes] = await Promise.all([
     supabase.from('app_users').select('id, first_name, last_name, username').eq('id', userId).maybeSingle(),
     supabase.from('allowance_sessions').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
@@ -39,21 +50,28 @@ export default async function handler(req, res) {
   const displayName = user.first_name || user.username || 'Student';
 
   const cycles = cyclesRes.data || [];
-  const activeCycle = cycles.find(c => c.is_active || !c.closed_at) || cycles[0];
-  const cycleName = activeCycle?.name || 'Current Allowance Cycle';
-  const goalAmt = Number(activeCycle?.goal_amount || 0);
-  const goalTitle = activeCycle?.goal_title || 'Savings';
+  // Identify the exact cycle currently viewed by the user
+  const activeCycle = (sessionId ? cycles.find(c => c.id === sessionId) : null) ||
+                      cycles.find(c => c.is_active || !c.closed_at) ||
+                      cycles[0];
+  const cycleName = clientSessionName || activeCycle?.name || 'Current Allowance Cycle';
+  const goalAmt = clientGoalAmount !== undefined ? Number(clientGoalAmount) : Number(activeCycle?.goal_amount || 0);
+  const goalTitle = clientGoalTitle || activeCycle?.goal_title || 'Savings';
+  const cadence = clientBudgetPeriod || 'weekly';
 
   const txs = txsRes.data || [];
-  const totalIncome = txs.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0);
-  const totalExpense = txs.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
-  const availableBalance = totalIncome - totalExpense;
+  const fallbackIncome = txs.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0);
+  const fallbackExpense = txs.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
+
+  const totalIncome = clientTotalIncome !== undefined ? Number(clientTotalIncome) : fallbackIncome;
+  const totalExpense = clientTotalExpense !== undefined ? Number(clientTotalExpense) : fallbackExpense;
+  const availableBalance = clientAvailableBudget !== undefined ? Number(clientAvailableBudget) : (totalIncome - totalExpense);
 
   // 2. Token-Saver Fast Path (Deterministic queries answered without hitting Gemini API)
   if (lowerMsg === 'balance' || lowerMsg === 'what is my balance' || lowerMsg === 'how much is my balance' || lowerMsg === 'how much money do i have' || lowerMsg === 'my balance') {
     return res.status(200).json({
       action: 'chat',
-      reply: `Kumusta, ${displayName}! Your current available cash is **₱${availableBalance.toFixed(2)}** in **${cycleName}** (Total Added: ₱${totalIncome.toFixed(2)}, Total Spent: ₱${totalExpense.toFixed(2)}).`,
+      reply: `Kumusta, ${displayName}! In your viewed cycle **${cycleName}**, your available balance is **₱${availableBalance.toFixed(2)}** (Total Added: ₱${totalIncome.toFixed(2)}, Total Spent: ₱${totalExpense.toFixed(2)}).`,
       meta: { tokenSaved: true }
     });
   }
@@ -70,7 +88,7 @@ export default async function handler(req, res) {
     const lines = expenseList.map(t => `* **${t.description || t.category}**: ₱${Number(t.amount).toFixed(2)} (${new Date(t.created_at).toLocaleDateString()})`).join('\n');
     return res.status(200).json({
       action: 'chat',
-      reply: `Here are your recent expenses in **${cycleName}**:\n\n${lines}\n\nTotal spent so far: **₱${totalExpense.toFixed(2)}**.`,
+      reply: `Here are your recent expenses for **${cycleName}**:\n\n${lines}\n\nTotal spent: **₱${totalExpense.toFixed(2)}**.`,
       meta: { tokenSaved: true }
     });
   }
@@ -87,24 +105,37 @@ export default async function handler(req, res) {
   const systemPrompt = `You are Ctrl+Advisor, the intelligent, friendly, student-oriented financial coach in the Ctrl+Savings allowance tracker app at USTP (University of Science and Technology of Southern Philippines) in Cagayan de Oro.
 User Profile:
 - Name: ${displayName}
-- Current Available Balance: ₱${availableBalance.toFixed(2)}
-- Active Period/Cycle: "${cycleName}"
-- Target Savings Goal: ₱${goalAmt.toFixed(2)} (${goalTitle})
+- CURRENT VIEWED ALLOWANCE CYCLE: "${cycleName}"
+- Available Balance in "${cycleName}": ₱${availableBalance.toFixed(2)}
+- Total Added to "${cycleName}": ₱${totalIncome.toFixed(2)}
+- Total Spent from "${cycleName}": ₱${totalExpense.toFixed(2)}
+- Cadence: ${cadence}
+- Target Savings Goal for "${cycleName}": ₱${goalAmt.toFixed(2)} (${goalTitle})
 - Recent transactions (up to 8): ${JSON.stringify(recentSnippet)}
+
+CRITICAL SESSION RULES:
+- The user is currently viewing and managing their "${cycleName}" allowance cycle.
+- All advice, balance checks, and transaction logs MUST relate directly to "${cycleName}".
+- Explicitly mention "${cycleName}" in your response so the student always knows which cycle is being discussed or updated.
+
+CRITICAL DEDUPLICATION & EXTRACTION RULES:
+- When a user states what they bought/ate and the amount spent in the same message (e.g. "i ate burger i spent 200 pesos", "bought coffee for 100 pesos", "paid 15 pesos for jeepney"), this is ONE SINGLE TRANSACTION.
+- NEVER create duplicate transactions for a single purchase.
+- Do NOT assume multiple quantities unless explicitly stated with quantity words (e.g. "2 burgers", "two coffees").
+- Only extract multiple transactions when distinct separate items/amounts are explicitly described (e.g. "my papa gave me 200 pesos but i spent 50 pesos" -> 1 income of 200, 1 expense of 50; or "bought burger for 100 and fries for 50" -> 2 expenses: 100 and 50).
 
 Your Goals:
 1. Detect financial actions:
    - When user spent money, bought items, paid fares/canteen, or received cash/allowance/remittance, classify as "add_transaction".
-   - Support ONE OR MULTIPLE financial events in a single message (e.g. "my papa gave me 200 pesos but i spent 50 pesos" -> income: 200, expense: 50).
    - In "transactions", provide an array of objects. Each item must have:
      * "type": "expense" or "income"
      * "amount": positive number in Philippine Pesos
-     * "description": short clean item name (e.g. "Allowance from Papa", "Coffee", "Jeepney Fare", "Snack Expense", "CS111 Materials")
+     * "description": short clean item name (e.g. "Burger", "Coffee", "Jeepney Fare", "Snack Expense", "Allowance from Papa")
      * "category": one of ["Food", "Transport", "School", "Bills", "Leisure", "Shopping", "Allowance", "Other"]
-   - If an expense exceeds the user's available balance (₱${availableBalance.toFixed(2)}), clearly mention in your reply that it exceeds their available funds and ask if they are sure they want to record it.
+   - If an expense exceeds the user's available balance in "${cycleName}" (₱${availableBalance.toFixed(2)}), clearly state in your reply that it exceeds their funds in "${cycleName}" and ask if they are sure they want to record it.
 2. For advice, analysis, savings ideas, or questions:
    - Classify as "chat". Provide friendly, empathetic, actionable student advice formatted nicely in Markdown with emojis.
-   - Address ${displayName} warmly.
+   - Address ${displayName} warmly and reference "${cycleName}".
 
 OUTPUT FORMAT:
 Respond STRICTLY with valid JSON.
@@ -118,18 +149,32 @@ Respond STRICTLY with valid JSON.
       "category": "<category>"
     }
   ],
-  "reply": "<friendly, clear message directly answering the user>"
+  "reply": "<friendly, clear message directly answering the user, mentioning ${cycleName}>"
 }`;
 
   const tryCallGemini = async (modelName) => {
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+    
+    // Format past message history (last 10 turns) into Gemini format
+    const formattedHistory = (Array.isArray(history) ? history.slice(-10) : [])
+      .filter(h => h && h.text && typeof h.text === 'string' && !h.isError && h.id !== 'msg_welcome')
+      .map(h => ({
+        role: h.role === 'user' ? 'user' : 'model',
+        parts: [{ text: h.text }]
+      }));
+
+    const contents = [
+      { role: 'user', parts: [{ text: systemPrompt }] },
+      { role: 'model', parts: [{ text: '{"action":"chat","reply":"Understood! I will act as Ctrl+Advisor for the current cycle with strict deduplication."}' }] },
+      ...formattedHistory,
+      { role: 'user', parts: [{ text: cleanMessage }] }
+    ];
+
     const response = await fetch(geminiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          { parts: [{ text: systemPrompt + `\n\nUser Message: "${cleanMessage}"` }] }
-        ],
+        contents,
         generationConfig: { responseMimeType: 'application/json' }
       })
     });
@@ -147,13 +192,14 @@ Respond STRICTLY with valid JSON.
   try {
     let parsed;
     try {
+      // Primary fast model (verified 1.4s response time)
       parsed = await tryCallGemini('gemini-3.6-flash');
     } catch (e1) {
-      console.warn('gemini-3.6-flash failed, trying gemini-3.5-flash:', e1.message);
+      console.warn('gemini-3.6-flash failed, trying gemini-3.7-flash:', e1.message);
       try {
-        parsed = await tryCallGemini('gemini-3.5-flash');
+        parsed = await tryCallGemini('gemini-3.7-flash');
       } catch (e2) {
-        console.warn('gemini-3.5-flash failed, trying gemini-flash-latest:', e2.message);
+        console.warn('gemini-3.7-flash failed, trying gemini-flash-latest:', e2.message);
         parsed = await tryCallGemini('gemini-flash-latest');
       }
     }
@@ -175,9 +221,23 @@ Respond STRICTLY with valid JSON.
           };
         }).filter(t => t.amount > 0);
 
+        // Programmatic Deduplication Safeguard: Drop unintended duplicate items
+        const seenCounts = new Map();
+        const deduplicatedTxs = [];
+        for (const t of validatedTxs) {
+          const key = `${t.type}_${t.amount}_${t.description.toLowerCase()}`;
+          const count = seenCounts.get(key) || 0;
+          if (count > 0) {
+            const hasMultiple = /\b(2|3|4|two|three|four|both|pair|twice|double|separate)\b/i.test(cleanMessage);
+            if (!hasMultiple) continue; // Skip duplicate
+          }
+          seenCounts.set(key, count + 1);
+          deduplicatedTxs.push(t);
+        }
+
         // Check if any expense exceeds current balance
-        const totalExpensesInBatch = validatedTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-        const totalIncomeInBatch = validatedTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+        const totalExpensesInBatch = deduplicatedTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        const totalIncomeInBatch = deduplicatedTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
         
         // If income is part of the batch, net available becomes availableBalance + income
         const effectiveBalance = availableBalance + totalIncomeInBatch;
@@ -186,18 +246,18 @@ Respond STRICTLY with valid JSON.
 
         return res.status(200).json({
           action: 'add_transaction',
-          transactions: validatedTxs,
-          transaction: validatedTxs[0], // backward compatibility
+          transactions: deduplicatedTxs,
+          transaction: deduplicatedTxs[0], // backward compatibility
           exceedsBudget,
           overAmount,
-          reply: parsed.reply || `Recorded transactions for ${validatedTxs.map(t => t.description).join(', ')}.`
+          reply: parsed.reply || `Recorded transactions for ${deduplicatedTxs.map(t => t.description).join(', ')} in ${cycleName}.`
         });
       }
     }
 
     return res.status(200).json({
       action: parsed.action || 'chat',
-      reply: parsed.reply || 'Here is what I found for your allowance.'
+      reply: parsed.reply || `Here is what I found for your allowance in ${cycleName}.`
     });
 
   } catch (err) {
@@ -260,7 +320,7 @@ Respond STRICTLY with valid JSON.
         transaction: fallbackTxs[0],
         exceedsBudget: exceeds,
         overAmount: overAmt,
-        reply: `Got it, ${displayName}! I've extracted: ${fallbackTxs.map(t => `${t.type === 'income' ? '+' : '-'}₱${t.amount.toFixed(2)} (${t.description})`).join(', ')}.`,
+        reply: `Got it, ${displayName}! Recorded ${fallbackTxs.map(t => `${t.description} (₱${t.amount.toFixed(2)})`).join(' and ')} in your **${cycleName}** cycle. Your balance is now ₱${Math.max(0, effectiveBal - totalExp).toFixed(2)}.`,
         fallbackMode: true
       });
     }

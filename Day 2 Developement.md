@@ -2,8 +2,14 @@
 
 **Project**: Ctrl+Savings (Zero-Lag, Offline-First Allowance & Savings Tracker)  
 **Student Developer**: Justine Roy P. Salvador  
+**Project Development Team**:
+* **Problem & Design Analyst**: @Shawn Hitalada
+* **Main Programmer**: @Justine Salvador
+* **Tester & Debugger**: @John Kurt Montero
+* **Operator & Presenter**: @Mark Bacus
+* **Project Leader**: @Danlord Farell A. Soriano  
 **Degree Program**: Bachelor of Science in Computer Science  
-**Institution**: University of Science and Technology of Southern Philippines (USTP)  
+**Institution**: University of Science and Technology of Southern Philippines (USTP CDO)  
 **Course & Milestone**: CS111 - Introduction to Computing (Prelims Project-Based Learning)  
 **Date**: September 7, 2026  
 
@@ -195,19 +201,19 @@ To optimize token quotas and minimize latency, deterministic balance checks bypa
 
 ---
 
-## Section 6: Verification Matrix (Day 2)
+## Section 6: Verification & Validation Summary
 
-| Feature / Scenario | Test Input / Action | Expected Result | Status |
-|---|---|---|---|
-| **Production Build** | `npm run build` | 0 errors, 0 warnings (built in ~448ms) | **PASSED** |
-| **Token-Saver Fast Path** | Chat: *"balance"* | HTTP 200: Instant balance readout without LLM tokens | **PASSED** |
-| **Single Expense Logging** | Chat: *"I bought a coffee for 100 pesos"* | HTTP 200: Auto-logged to DB, green receipt displayed | **PASSED** |
-| **Over-Budget Warning** | Chat: *"I bought a luxury laptop for 85000 pesos"* | HTTP 200: Warning Card rendered with Yes/Cancel actions | **PASSED** |
-| **Compound Multi-Action** | Chat: *"my papa gave me 200 pesos but i spent 50 pesos"* | HTTP 200: Batch logs `+₱200` Income and `-₱50` Expense | **PASSED** |
-| **Delete Transaction** | `DELETE /api/transactions?id=[uuid]` | HTTP 200: Removed from DB, UI updates immediately | **PASSED** |
-| **Allowance Cycle CRUD** | Create, switch, and delete cycles | HTTP 200: Persisted in `allowance_sessions` table | **PASSED** |
-| **UUID Compatibility** | Sanitizes legacy `sess_` strings | HTTP 200: Safe RFC 4122 v4 UUID handling | **PASSED** |
-| **Zero Gatekeeping** | Simulated network/database error | Immediate prominent red alert banner with error code | **PASSED** |
+| Test Case | Scenario / Query | Expected Behavior | Result | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Production Build** | `npm run build` | 0 errors, 0 warnings, optimized bundle | Built in ~448ms with 0 errors | **PASS** |
+| **Token-Saver Fast Path** | Chat: *"balance"* | Immediate balance readout without LLM latency or tokens | Returned live database calculation in 0ms LLM time | **PASS** |
+| **Single Expense Logging** | Chat: *"I bought a coffee for 100 pesos"* | Auto-logged to DB, green receipt displayed in chat | Persisted to Supabase; balance deducted | **PASS** |
+| **Over-Budget Warning** | Chat: *"I bought a luxury laptop for 85000 pesos"* | Warning card rendered with Yes/Cancel actions | Prevented unconfirmed database write | **PASS** |
+| **Compound Multi-Action** | Chat: *"my papa gave me 200 pesos but i spent 50 pesos"* | Batch logs `+₱200` Income and `-₱50` Expense | Both transactions parsed and recorded | **PASS** |
+| **Delete Transaction** | `DELETE /api/transactions?id=[uuid]` | Removed from DB, UI updates immediately | Record deleted from Supabase without 404s | **PASS** |
+| **Allowance Cycle CRUD** | Create, switch, and delete cycles | Persisted in `allowance_sessions` table with goal tracking | Full lifecycle persistence with cascading integrity | **PASS** |
+| **UUID Compatibility** | Sanitizes legacy `sess_` strings | Safe RFC 4122 v4 UUID handling | Zero PostgreSQL 22P02 syntax errors | **PASS** |
+| **Zero Gatekeeping** | Simulated network/database error | Immediate prominent red alert banner with error code | Surfaced full error to UI without swallowing | **PASS** |
 
 ---
 

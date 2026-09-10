@@ -32,9 +32,22 @@ export default async function handler(req, res) {
 
   // POST: Create a new cycle (and close previous active cycle)
   if (req.method === 'POST') {
-    const { name, description, goal_amount, goal_title } = req.body || {};
+    const parsed = req.body || {};
+    let name = parsed.name;
+    let description = parsed.description;
+    let goal_amount = parsed.goal_amount ?? parsed.goalAmount;
+    let goal_title = parsed.goal_title ?? parsed.goalTitle;
 
-    if (!name || !name.trim()) {
+    // Support nested object e.g. { name: { name: "Weekly Baon", ... } }
+    if (typeof name === 'object' && name !== null) {
+      description = name.description ?? description;
+      goal_amount = name.goal_amount ?? name.goalAmount ?? goal_amount;
+      goal_title = name.goal_title ?? name.goalTitle ?? goal_title;
+      name = name.name;
+    }
+
+    const cleanName = typeof name === 'string' ? name.trim() : (name ? String(name).trim() : '');
+    if (!cleanName) {
       return res.status(400).json({ error: 'Cycle name is required.' });
     }
 
@@ -52,10 +65,10 @@ export default async function handler(req, res) {
       .from('allowance_sessions')
       .insert({
         user_id: userId,
-        name: name.trim(),
-        description: description ? description.trim() : null,
+        name: cleanName,
+        description: description ? String(description).trim() : null,
         goal_amount: Number(goal_amount) || 0,
-        goal_title: goal_title ? goal_title.trim() : null,
+        goal_title: goal_title ? String(goal_title).trim() : null,
         is_active: true,
         created_at: nowIso,
         closed_at: null
@@ -72,7 +85,22 @@ export default async function handler(req, res) {
 
   // PUT: Update an existing cycle (name, goal, description, is_active)
   if (req.method === 'PUT') {
-    const { id, name, description, goal_amount, goal_title, is_active, closed_at } = req.body || {};
+    const parsed = req.body || {};
+    let id = parsed.id;
+    let name = parsed.name;
+    let description = parsed.description;
+    let goal_amount = parsed.goal_amount ?? parsed.goalAmount;
+    let goal_title = parsed.goal_title ?? parsed.goalTitle;
+    let is_active = parsed.is_active ?? parsed.isActive;
+    let closed_at = parsed.closed_at ?? parsed.closedAt;
+
+    // Support nested object
+    if (typeof name === 'object' && name !== null) {
+      description = name.description ?? description;
+      goal_amount = name.goal_amount ?? name.goalAmount ?? goal_amount;
+      goal_title = name.goal_title ?? name.goalTitle ?? goal_title;
+      name = name.name;
+    }
 
     if (!id) {
       return res.status(400).json({ error: 'Cycle ID is required.' });
@@ -84,10 +112,10 @@ export default async function handler(req, res) {
     }
 
     const updates = {};
-    if (name !== undefined) updates.name = name.trim();
-    if (description !== undefined) updates.description = description ? description.trim() : null;
+    if (name !== undefined) updates.name = typeof name === 'string' ? name.trim() : String(name).trim();
+    if (description !== undefined) updates.description = description ? String(description).trim() : null;
     if (goal_amount !== undefined) updates.goal_amount = Number(goal_amount) || 0;
-    if (goal_title !== undefined) updates.goal_title = goal_title ? goal_title.trim() : null;
+    if (goal_title !== undefined) updates.goal_title = goal_title ? String(goal_title).trim() : null;
     if (is_active !== undefined) updates.is_active = Boolean(is_active);
     if (closed_at !== undefined) updates.closed_at = closed_at;
 

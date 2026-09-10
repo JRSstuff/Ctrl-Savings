@@ -1,6 +1,7 @@
 <script>
   import { fade, slide, scale } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
+  import AppIcon from './AppIcon.svelte'
 
   let {
     isOpen = false,
@@ -37,11 +38,11 @@
   let confirmDeleteId = $state(null)
 
   const CYCLE_PRESETS = [
-    { name: 'Weekly Baon', icon: '⚡', goal: '300', goalTitle: 'Baon Savings Cushion' },
-    { name: 'School Week', icon: '🎒', goal: '500', goalTitle: 'Project & Photocopy Fund' },
-    { name: 'Savings Sprint', icon: '🎯', goal: '1000', goalTitle: 'Emergency Stash' },
-    { name: 'Weekend Trip', icon: '🍕', goal: '200', goalTitle: 'Food & Hangout' },
-    { name: 'Payday Cutoff', icon: '📅', goal: '1500', goalTitle: 'Cutoff Savings' }
+    { name: 'Weekly Baon', iconName: 'weekly', goal: '300', goalTitle: 'Baon Savings Cushion' },
+    { name: 'School Week', iconName: 'school', goal: '500', goalTitle: 'Project & Photocopy Fund' },
+    { name: 'Savings Sprint', iconName: 'target', goal: '1000', goalTitle: 'Emergency Stash' },
+    { name: 'Weekend Trip', iconName: 'food', goal: '200', goalTitle: 'Food & Hangout' },
+    { name: 'Payday Cutoff', iconName: 'monthly', goal: '1500', goalTitle: 'Cutoff Savings' }
   ]
 
   const GOAL_PRESETS = ['200', '500', '1000', '2000']
@@ -55,21 +56,44 @@
   }
 
   function getSessionStats(s) {
-    const sCreated = s.createdAt || s.created_at
-    const sClosed = s.closedAt || s.closed_at
-    const start = new Date(sCreated).getTime()
-    const end = sClosed ? new Date(sClosed).getTime() : Infinity
-    const sTx = transactions.filter(t => {
+    if (!s) return { income: 0, expense: 0, balance: 0, count: 0 }
+
+    if (sessions.length <= 1) {
+      const income = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0)
+      const expense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0)
+      return { income, expense, balance: income - expense, count: transactions.length }
+    }
+
+    // Chronologically sort sessions to identify session order
+    const chronological = [...sessions].sort((a, b) => {
+      const timeA = new Date(a.created_at || a.createdAt || 0).getTime()
+      const timeB = new Date(b.created_at || b.createdAt || 0).getTime()
+      return timeA - timeB
+    })
+
+    const isEarliest = chronological[0]?.id === s.id
+    const isLatest = chronological[chronological.length - 1]?.id === s.id
+    const isActive = Boolean(s.is_active || s.id === activeSessionId)
+
+    const start = isEarliest ? 0 : new Date(s.created_at || s.createdAt || 0).getTime()
+    const isArchivedPastCycle = !isActive && !isLatest && Boolean(s.closedAt || s.closed_at)
+    const end = isArchivedPastCycle ? new Date(s.closedAt || s.closed_at).getTime() : Infinity
+
+    let sTx = transactions.filter(t => {
       const tTime = new Date(t.created_at).getTime()
       return tTime >= start && tTime <= end
     })
+
+    if (sTx.length === 0) {
+      sTx = transactions
+    }
+
     const income = sTx.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0)
     const expense = sTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0)
-    const balance = income - expense
     return {
       income,
       expense,
-      balance,
+      balance: income - expense,
       count: sTx.length
     }
   }
@@ -268,9 +292,9 @@
                 <button
                   type="button"
                   onclick={() => applyPreset(p)}
-                  class="cursor-pointer py-1 px-2.5 rounded-lg text-xs font-bold border transition-all active:scale-95 flex items-center gap-1 {newSessionName === p.name ? (theme === 'dark' ? 'bg-emerald-500 text-black border-emerald-400 shadow-xs' : 'bg-[#0a4733] text-white border-[#0a4733] shadow-xs') : (theme === 'dark' ? 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-100')}"
+                  class="cursor-pointer py-1 px-2.5 rounded-lg text-xs font-bold border transition-all active:scale-95 flex items-center gap-1.5 {newSessionName === p.name ? (theme === 'dark' ? 'bg-emerald-500 text-black border-emerald-400 shadow-xs' : 'bg-[#0a4733] text-white border-[#0a4733] shadow-xs') : (theme === 'dark' ? 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-100')}"
                 >
-                  <span>{p.icon}</span>
+                  <AppIcon name={p.iconName} size={14} />
                   <span>{p.name}</span>
                 </button>
               {/each}

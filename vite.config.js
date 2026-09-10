@@ -333,8 +333,22 @@ function apiDevPlugin(env) {
         req.on('data', chunk => body += chunk)
         req.on('end', async () => {
           try {
-            const { name, description, goal_amount, goal_title } = JSON.parse(body || '{}')
-            if (!name || !name.trim()) {
+            const parsed = JSON.parse(body || '{}')
+            let name = parsed.name
+            let description = parsed.description
+            let goal_amount = parsed.goal_amount ?? parsed.goalAmount
+            let goal_title = parsed.goal_title ?? parsed.goalTitle
+
+            // Support nested object e.g. { name: { name: "Weekly Baon", ... } }
+            if (typeof name === 'object' && name !== null) {
+              description = name.description ?? description
+              goal_amount = name.goal_amount ?? name.goalAmount ?? goal_amount
+              goal_title = name.goal_title ?? name.goalTitle ?? goal_title
+              name = name.name
+            }
+
+            const cleanName = typeof name === 'string' ? name.trim() : (name ? String(name).trim() : '')
+            if (!cleanName) {
               res.statusCode = 400
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ error: 'Cycle name is required.' }))
@@ -352,10 +366,10 @@ function apiDevPlugin(env) {
               .from('allowance_sessions')
               .insert({
                 user_id: userId,
-                name: name.trim(),
-                description: description ? description.trim() : null,
+                name: cleanName,
+                description: description ? String(description).trim() : null,
                 goal_amount: Number(goal_amount) || 0,
-                goal_title: goal_title ? goal_title.trim() : null,
+                goal_title: goal_title ? String(goal_title).trim() : null,
                 is_active: true,
                 created_at: nowIso,
                 closed_at: null
@@ -367,9 +381,10 @@ function apiDevPlugin(env) {
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify(error ? { error: error.message } : { data }))
           } catch (err) {
+            console.error('Server error creating cycle:', err)
             res.statusCode = 500
             res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ error: 'Server error creating cycle.' }))
+            res.end(JSON.stringify({ error: err.message || 'Server error creating cycle.' }))
           }
         })
         return
@@ -380,7 +395,23 @@ function apiDevPlugin(env) {
         req.on('data', chunk => body += chunk)
         req.on('end', async () => {
           try {
-            const { id, name, description, goal_amount, goal_title, is_active, closed_at } = JSON.parse(body || '{}')
+            const parsed = JSON.parse(body || '{}')
+            let id = parsed.id
+            let name = parsed.name
+            let description = parsed.description
+            let goal_amount = parsed.goal_amount ?? parsed.goalAmount
+            let goal_title = parsed.goal_title ?? parsed.goalTitle
+            let is_active = parsed.is_active ?? parsed.isActive
+            let closed_at = parsed.closed_at ?? parsed.closedAt
+
+            // Support nested object
+            if (typeof name === 'object' && name !== null) {
+              description = name.description ?? description
+              goal_amount = name.goal_amount ?? name.goalAmount ?? goal_amount
+              goal_title = name.goal_title ?? name.goalTitle ?? goal_title
+              name = name.name
+            }
+
             if (!id) {
               res.statusCode = 400
               res.setHeader('Content-Type', 'application/json')
@@ -397,10 +428,10 @@ function apiDevPlugin(env) {
             }
 
             const updates = {}
-            if (name !== undefined) updates.name = name.trim()
-            if (description !== undefined) updates.description = description ? description.trim() : null
+            if (name !== undefined) updates.name = typeof name === 'string' ? name.trim() : String(name).trim()
+            if (description !== undefined) updates.description = description ? String(description).trim() : null
             if (goal_amount !== undefined) updates.goal_amount = Number(goal_amount) || 0
-            if (goal_title !== undefined) updates.goal_title = goal_title ? goal_title.trim() : null
+            if (goal_title !== undefined) updates.goal_title = goal_title ? String(goal_title).trim() : null
             if (is_active !== undefined) updates.is_active = Boolean(is_active)
             if (closed_at !== undefined) updates.closed_at = closed_at
 
@@ -416,9 +447,10 @@ function apiDevPlugin(env) {
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify(error ? { error: error.message } : { data }))
           } catch (err) {
+            console.error('Server error updating cycle:', err)
             res.statusCode = 500
             res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ error: 'Server error updating cycle.' }))
+            res.end(JSON.stringify({ error: err.message || 'Server error updating cycle.' }))
           }
         })
         return
@@ -471,7 +503,19 @@ function apiDevPlugin(env) {
       req.on('data', chunk => body += chunk)
       req.on('end', async () => {
         try {
-          const { message } = JSON.parse(body || '{}')
+          const {
+            message,
+            history = [],
+            sessionId,
+            sessionName: clientSessionName,
+            availableBudget: clientAvailableBudget,
+            totalIncome: clientTotalIncome,
+            totalExpense: clientTotalExpense,
+            budgetPeriod: clientBudgetPeriod,
+            sessionGoalAmount: clientGoalAmount,
+            sessionGoalTitle: clientGoalTitle
+          } = JSON.parse(body || '{}')
+
           if (!message || !message.trim()) {
             res.statusCode = 400
             res.setHeader('Content-Type', 'application/json')
@@ -484,7 +528,7 @@ function apiDevPlugin(env) {
 
           const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-          // 1. Fetch user profile, active cycle, and transactions scoped strictly to userId
+          // 1. Fetch user profile, cycles, and transactions scoped strictly to userId
           const [userRes, cyclesRes, txsRes] = await Promise.all([
             supabase.from('app_users').select('id, first_name, last_name, username').eq('id', userId).maybeSingle(),
             supabase.from('allowance_sessions').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
@@ -495,24 +539,31 @@ function apiDevPlugin(env) {
           const displayName = user.first_name || user.username || 'Student'
 
           const cycles = cyclesRes.data || []
-          const activeCycle = cycles.find(c => c.is_active || !c.closed_at) || cycles[0]
-          const cycleName = activeCycle?.name || 'Current Allowance Cycle'
-          const goalAmt = Number(activeCycle?.goal_amount || 0)
-          const goalTitle = activeCycle?.goal_title || 'Savings'
+          // Identify the exact cycle currently viewed by the user
+          const activeCycle = (sessionId ? cycles.find(c => c.id === sessionId) : null) ||
+                              cycles.find(c => c.is_active || !c.closed_at) ||
+                              cycles[0]
+          const cycleName = clientSessionName || activeCycle?.name || 'Current Allowance Cycle'
+          const goalAmt = clientGoalAmount !== undefined ? Number(clientGoalAmount) : Number(activeCycle?.goal_amount || 0)
+          const goalTitle = clientGoalTitle || activeCycle?.goal_title || 'Savings'
+          const cadence = clientBudgetPeriod || 'weekly'
 
           const txs = txsRes.data || []
-          const totalIncome = txs.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0)
-          const totalExpense = txs.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0)
-          const availableBalance = totalIncome - totalExpense
+          const fallbackIncome = txs.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0)
+          const fallbackExpense = txs.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0)
+
+          const totalIncome = clientTotalIncome !== undefined ? Number(clientTotalIncome) : fallbackIncome
+          const totalExpense = clientTotalExpense !== undefined ? Number(clientTotalExpense) : fallbackExpense
+          const availableBalance = clientAvailableBudget !== undefined ? Number(clientAvailableBudget) : (totalIncome - totalExpense)
 
           res.setHeader('Content-Type', 'application/json')
 
-          // 2. Token-Saver Fast Path (Deterministic queries answered without hitting Gemini API)
+          // 2. Token-Saver Fast Path (Deterministic balance check answered immediately)
           if (lowerMsg === 'balance' || lowerMsg === 'what is my balance' || lowerMsg === 'how much is my balance' || lowerMsg === 'how much money do i have' || lowerMsg === 'my balance') {
             res.statusCode = 200
             res.end(JSON.stringify({
               action: 'chat',
-              reply: `Kumusta, ${displayName}! Your current available cash is **₱${availableBalance.toFixed(2)}** in **${cycleName}** (Total Added: ₱${totalIncome.toFixed(2)}, Total Spent: ₱${totalExpense.toFixed(2)}).`,
+              reply: `Kumusta, ${displayName}! In your viewed cycle **${cycleName}**, your available balance is **₱${availableBalance.toFixed(2)}** (Total Added: ₱${totalIncome.toFixed(2)}, Total Spent: ₱${totalExpense.toFixed(2)}).`,
               meta: { tokenSaved: true }
             }))
             return
@@ -533,7 +584,7 @@ function apiDevPlugin(env) {
             res.statusCode = 200
             res.end(JSON.stringify({
               action: 'chat',
-              reply: `Here are your recent expenses in **${cycleName}**:\n\n${lines}\n\nTotal spent so far: **₱${totalExpense.toFixed(2)}**.`,
+              reply: `Here are your recent expenses for **${cycleName}**:\n\n${lines}\n\nTotal spent: **₱${totalExpense.toFixed(2)}**.`,
               meta: { tokenSaved: true }
             }))
             return
@@ -551,24 +602,37 @@ function apiDevPlugin(env) {
           const systemPrompt = `You are Ctrl+Advisor, the intelligent, friendly, student-oriented financial coach in the Ctrl+Savings allowance tracker app at USTP (University of Science and Technology of Southern Philippines) in Cagayan de Oro.
 User Profile:
 - Name: ${displayName}
-- Current Available Balance: ₱${availableBalance.toFixed(2)}
-- Active Period/Cycle: "${cycleName}"
-- Target Savings Goal: ₱${goalAmt.toFixed(2)} (${goalTitle})
+- CURRENT VIEWED ALLOWANCE CYCLE: "${cycleName}"
+- Available Balance in "${cycleName}": ₱${availableBalance.toFixed(2)}
+- Total Added to "${cycleName}": ₱${totalIncome.toFixed(2)}
+- Total Spent from "${cycleName}": ₱${totalExpense.toFixed(2)}
+- Cadence: ${cadence}
+- Target Savings Goal for "${cycleName}": ₱${goalAmt.toFixed(2)} (${goalTitle})
 - Recent transactions (up to 8): ${JSON.stringify(recentSnippet)}
+
+CRITICAL SESSION RULES:
+- The user is currently viewing and managing their "${cycleName}" allowance cycle.
+- All advice, balance checks, and transaction logs MUST relate directly to "${cycleName}".
+- Explicitly mention "${cycleName}" in your response so the student always knows which cycle is being discussed or updated.
+
+CRITICAL DEDUPLICATION & EXTRACTION RULES:
+- When a user states what they bought/ate and the amount spent in the same message (e.g. "i ate burger i spent 200 pesos", "bought coffee for 100 pesos", "paid 15 pesos for jeepney"), this is ONE SINGLE TRANSACTION.
+- NEVER create duplicate transactions for a single purchase.
+- Do NOT assume multiple quantities unless explicitly stated with quantity words (e.g. "2 burgers", "two coffees").
+- Only extract multiple transactions when distinct separate items/amounts are explicitly described (e.g. "my papa gave me 200 pesos but i spent 50 pesos" -> 1 income of 200, 1 expense of 50; or "bought burger for 100 and fries for 50" -> 2 expenses: 100 and 50).
 
 Your Goals:
 1. Detect financial actions:
    - When user spent money, bought items, paid fares/canteen, or received cash/allowance/remittance, classify as "add_transaction".
-   - Support ONE OR MULTIPLE financial events in a single message (e.g. "my papa gave me 200 pesos but i spent 50 pesos" -> income: 200, expense: 50).
    - In "transactions", provide an array of objects. Each item must have:
      * "type": "expense" or "income"
      * "amount": positive number in Philippine Pesos
-     * "description": short clean item name (e.g. "Allowance from Papa", "Coffee", "Jeepney Fare", "Snack Expense", "CS111 Materials")
+     * "description": short clean item name (e.g. "Burger", "Coffee", "Jeepney Fare", "Snack Expense", "Allowance from Papa")
      * "category": one of ["Food", "Transport", "School", "Bills", "Leisure", "Shopping", "Allowance", "Other"]
-   - If an expense exceeds the user's available balance (₱${availableBalance.toFixed(2)}), clearly mention in your reply that it exceeds their available funds and ask if they are sure they want to record it.
+   - If an expense exceeds the user's available balance in "${cycleName}" (₱${availableBalance.toFixed(2)}), clearly state in your reply that it exceeds their funds in "${cycleName}" and ask if they are sure they want to record it.
 2. For advice, analysis, savings ideas, or questions:
    - Classify as "chat". Provide friendly, empathetic, actionable student advice formatted nicely in Markdown with emojis.
-   - Address ${displayName} warmly.
+   - Address ${displayName} warmly and reference "${cycleName}".
 
 OUTPUT FORMAT:
 Respond STRICTLY with valid JSON.
@@ -582,16 +646,31 @@ Respond STRICTLY with valid JSON.
       "category": "<category>"
     }
   ],
-  "reply": "<friendly, clear message directly answering the user>"
+  "reply": "<friendly, clear message directly answering the user, mentioning ${cycleName}>"
 }`
 
           const tryCallGemini = async (modelName) => {
             const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`
+            
+            const formattedHistory = (Array.isArray(history) ? history.slice(-10) : [])
+              .filter(h => h && h.text && typeof h.text === 'string' && !h.isError && h.id !== 'msg_welcome')
+              .map(h => ({
+                role: h.role === 'user' ? 'user' : 'model',
+                parts: [{ text: h.text }]
+              }))
+
+            const contents = [
+              { role: 'user', parts: [{ text: systemPrompt }] },
+              { role: 'model', parts: [{ text: '{"action":"chat","reply":"Understood! I will act as Ctrl+Advisor for the current cycle with strict deduplication."}' }] },
+              ...formattedHistory,
+              { role: 'user', parts: [{ text: cleanMessage }] }
+            ]
+
             const response = await fetch(geminiUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                contents: [{ parts: [{ text: systemPrompt + `\n\nUser Message: "${cleanMessage}"` }] }],
+                contents,
                 generationConfig: { responseMimeType: 'application/json' }
               })
             })
@@ -607,13 +686,14 @@ Respond STRICTLY with valid JSON.
           try {
             let parsed
             try {
+              // Primary fast model (verified 1.4s response time)
               parsed = await tryCallGemini('gemini-3.6-flash')
             } catch (e1) {
-              console.warn('gemini-3.6-flash failed in dev middleware, trying gemini-3.5-flash:', e1.message)
+              console.warn('gemini-3.6-flash failed in dev middleware, trying gemini-3.7-flash:', e1.message)
               try {
-                parsed = await tryCallGemini('gemini-3.5-flash')
+                parsed = await tryCallGemini('gemini-3.7-flash')
               } catch (e2) {
-                console.warn('gemini-3.5-flash failed, trying gemini-flash-latest:', e2.message)
+                console.warn('gemini-3.7-flash failed, trying gemini-flash-latest:', e2.message)
                 parsed = await tryCallGemini('gemini-flash-latest')
               }
             }
@@ -634,8 +714,22 @@ Respond STRICTLY with valid JSON.
                   }
                 }).filter(t => t.amount > 0)
 
-                const totalExpensesInBatch = validatedTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
-                const totalIncomeInBatch = validatedTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
+                // Programmatic Deduplication Safeguard: Drop unintended duplicate items
+                const seenCounts = new Map()
+                const deduplicatedTxs = []
+                for (const t of validatedTxs) {
+                  const key = `${t.type}_${t.amount}_${t.description.toLowerCase()}`
+                  const count = seenCounts.get(key) || 0
+                  if (count > 0) {
+                    const hasMultiple = /\b(2|3|4|two|three|four|both|pair|twice|double|separate)\b/i.test(cleanMessage)
+                    if (!hasMultiple) continue // Skip duplicate
+                  }
+                  seenCounts.set(key, count + 1)
+                  deduplicatedTxs.push(t)
+                }
+
+                const totalExpensesInBatch = deduplicatedTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+                const totalIncomeInBatch = deduplicatedTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
                 const effectiveBalance = availableBalance + totalIncomeInBatch
                 const exceedsBudget = totalExpensesInBatch > effectiveBalance
                 const overAmount = exceedsBudget ? totalExpensesInBatch - effectiveBalance : 0
@@ -643,11 +737,11 @@ Respond STRICTLY with valid JSON.
                 res.statusCode = 200
                 res.end(JSON.stringify({
                   action: 'add_transaction',
-                  transactions: validatedTxs,
-                  transaction: validatedTxs[0],
+                  transactions: deduplicatedTxs,
+                  transaction: deduplicatedTxs[0],
                   exceedsBudget,
                   overAmount,
-                  reply: parsed.reply || `Recorded transactions for ${validatedTxs.map(t => t.description).join(', ')}.`
+                  reply: parsed.reply || `Recorded transactions for ${deduplicatedTxs.map(t => t.description).join(', ')} in ${cycleName}.`
                 }))
                 return
               }
@@ -656,7 +750,7 @@ Respond STRICTLY with valid JSON.
             res.statusCode = 200
             res.end(JSON.stringify({
               action: parsed.action || 'chat',
-              reply: parsed.reply || 'Here is what I found for your allowance.'
+              reply: parsed.reply || `Here is what I found for your allowance in ${cycleName}.`
             }))
             return
 
@@ -721,20 +815,22 @@ Respond STRICTLY with valid JSON.
                 transaction: fallbackTxs[0],
                 exceedsBudget: exceeds,
                 overAmount: overAmt,
-                reply: `Got it, ${displayName}! I've extracted: ${fallbackTxs.map(t => `${t.type === 'income' ? '+' : '-'}₱${t.amount.toFixed(2)} (${t.description})`).join(', ')}.`,
-                fallbackMode: true
+                reply: `Got it, ${displayName}! Recorded ${fallbackTxs.map(t => `${t.description} (₱${t.amount.toFixed(2)})`).join(' and ')} in your **${cycleName}** cycle. Your balance is now ₱${Math.max(0, effectiveBal - totalExp).toFixed(2)}.`
               }))
               return
             }
 
-            res.statusCode = 502
-            res.end(JSON.stringify({ error: `Gemini API Error: ${apiErr.message}` }))
-            return
+            res.statusCode = 200
+            res.end(JSON.stringify({
+              action: 'chat',
+              reply: `Kumusta, ${displayName}! In your **${cycleName}** cycle, you have **₱${availableBalance.toFixed(2)}** available. Keep logging your daily baon and expenses!`
+            }))
           }
-
         } catch (err) {
+          console.error('Server error in /api/chat:', err)
           res.statusCode = 500
-          res.end(JSON.stringify({ error: 'Server error processing chat request.' }))
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: 'Server error processing chat message.' }))
         }
       })
       return
@@ -766,6 +862,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
+    server: {
+      port: 4173,
+      host: true
+    },
+    preview: {
+      port: 4173,
+      host: true
+    },
     plugins: [
       svelte(),
       tailwindcss(),

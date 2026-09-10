@@ -50,6 +50,44 @@
     }
   }
 
+  let isClearingCache = $state(false)
+  let clearSuccess = $state(false)
+
+  async function handleClearHardCache() {
+    if (isClearingCache) return
+    isClearingCache = true
+    try {
+      // 1. Delete all service worker caches (CacheStorage)
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        const cacheKeys = await caches.keys()
+        await Promise.all(cacheKeys.map(key => caches.delete(key)))
+      }
+
+      // 2. Unregister all service workers
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(registrations.map(reg => reg.unregister()))
+      }
+
+      // 3. Clear session and local storage
+      sessionStorage.clear()
+      localStorage.clear()
+
+      clearSuccess = true
+
+      // 4. Force a hard reload from network, busting cache
+      setTimeout(() => {
+        const cleanUrl = window.location.origin + window.location.pathname + '?fresh=' + Date.now()
+        window.location.replace(cleanUrl)
+      }, 500)
+    } catch (err) {
+      console.error('Failed to clear hard cache:', err)
+      localStorage.clear()
+      sessionStorage.clear()
+      window.location.reload()
+    }
+  }
+
   $effect(() => {
     loadProfile()
   })
@@ -171,6 +209,35 @@
       </span>
     </div>
 
+    <!-- Hard Cache & App Update Reset -->
+    <div class="w-full border rounded-lg p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs {theme === 'dark' ? 'bg-[#121215] border-zinc-800' : 'bg-white border-zinc-200'}">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-bold {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">Clear Hard Cache</span>
+          {#if clearSuccess}
+            <span class="text-[9px] font-mono font-black px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+              PURGED
+            </span>
+          {/if}
+        </div>
+        <p class="text-xs {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">
+          Purges service worker cache, updates, and reloads freshly
+        </p>
+      </div>
+      <button
+        type="button"
+        onclick={handleClearHardCache}
+        disabled={isClearingCache}
+        class="cursor-pointer text-xs font-black px-3.5 py-2 rounded-lg border transition-all active:scale-95 shrink-0 flex items-center justify-center gap-1.5 {theme === 'dark' ? 'bg-zinc-800/90 border-zinc-700 text-emerald-400 hover:bg-zinc-700' : 'bg-zinc-50 border-zinc-300 text-[#0a4733] hover:bg-zinc-100'}"
+        title="Clear all caches, unregister service workers, and refresh"
+      >
+        <svg class="w-3.5 h-3.5 {isClearingCache ? 'animate-spin' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        </svg>
+        <span>{isClearingCache ? 'Purging Cache...' : (clearSuccess ? 'Reloading...' : 'Clear Hard Cache')}</span>
+      </button>
+    </div>
+
     <!-- Sign Out Button -->
     <button
       onclick={() => {
@@ -205,38 +272,57 @@
 
     <!-- Modal Content -->
     <div 
-      class="relative w-full max-w-sm rounded-2xl shadow-2xl p-6 flex flex-col gap-4 {theme === 'dark' ? 'bg-[#121215] border border-zinc-800' : 'bg-white border border-zinc-200'}"
+      class="relative w-full max-w-sm rounded-2xl shadow-2xl p-5 flex flex-col gap-3.5 max-h-[90vh] overflow-y-auto {theme === 'dark' ? 'bg-[#121215] border border-zinc-800' : 'bg-white border border-zinc-200'}"
       transition:slide={{ duration: 250, axis: 'y' }}
     >
-      <div class="flex items-center justify-between border-b pb-3 {theme === 'dark' ? 'border-zinc-800' : 'border-zinc-100'}">
-        <h2 class="text-lg font-black tracking-tight {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">About this App</h2>
+      <div class="flex items-center justify-between border-b pb-2.5 {theme === 'dark' ? 'border-zinc-800' : 'border-zinc-100'}">
+        <div class="flex items-center gap-2">
+          <span class="text-base">👥</span>
+          <h2 class="text-base font-black tracking-tight {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">Project Team & Credits</h2>
+        </div>
         <button 
           type="button"
           aria-label="Close"
           onclick={() => showCreditsModal = false}
-          class="p-1 rounded-full {theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'}"
+          class="p-1 rounded-full cursor-pointer {theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'}"
         >
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
       </div>
       
-      <!-- Developer Credit -->
-      <div class="w-full rounded-xl p-4 flex items-center gap-3 mt-2 {theme === 'dark' ? 'bg-zinc-900/50' : 'bg-zinc-50'}">
-        <div class="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg shrink-0 {theme === 'dark' ? 'bg-emerald-500 text-black' : 'bg-[#0a4733] text-white'}">
-          JS
-        </div>
-        <div class="flex-1 min-w-0">
-          <h3 class="text-base font-black tracking-tight truncate {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">Justine Roy P. Salvador</h3>
-          <p class="text-xs font-semibold {theme === 'dark' ? 'text-emerald-400' : 'text-[#0a4733]'}">Computer Science Student • USTP</p>
-          <p class="text-[11px] font-mono mt-0.5 {theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}">CS111 Intro to Computing Prelims</p>
-        </div>
+      <!-- Project Team Members -->
+      <div class="flex flex-col gap-2">
+        {#each [
+          { role: 'Problem & Design Analyst', name: 'Shawn Hitalada', handle: '@Shawn Hitalada', icon: '🎨' },
+          { role: 'Main Programmer', name: 'Justine Salvador', handle: '@Justine Salvador', icon: '💻' },
+          { role: 'Tester & Debugger', name: 'John Kurt Montero', handle: '@John Kurt Montero', icon: '🧪' },
+          { role: 'Operator & Presenter', name: 'Mark Bacus', handle: '@Mark Bacus', icon: '🎙️' },
+          { role: 'Project Leader', name: 'Danlord Farell A. Soriano', handle: '@Danlord Farell A. Soriano', icon: '👑' }
+        ] as member}
+          <div class="p-2 rounded-xl border flex items-center justify-between gap-2 {theme === 'dark' ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-sm shrink-0">{member.icon}</span>
+              <div class="min-w-0">
+                <span class="text-[9px] font-bold uppercase tracking-wider block {theme === 'dark' ? 'text-emerald-400' : 'text-[#0a4733]'}">
+                  {member.role}
+                </span>
+                <p class="text-xs font-black truncate {theme === 'dark' ? 'text-white' : 'text-zinc-900'}">
+                  {member.name}
+                </p>
+              </div>
+            </div>
+            <span class="text-[10px] font-mono font-medium shrink-0 px-1.5 py-0.5 rounded border {theme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-white border-zinc-200 text-zinc-700'}">
+              {member.handle}
+            </span>
+          </div>
+        {/each}
       </div>
 
       <!-- Academic Project Badge -->
-      <div class="w-full rounded-lg p-3 flex flex-col gap-1 {theme === 'dark' ? 'bg-emerald-950/20 border border-emerald-900/50' : 'bg-emerald-50/70 border border-emerald-200/60'}">
+      <div class="w-full rounded-xl p-3 flex flex-col gap-1 {theme === 'dark' ? 'bg-emerald-950/20 border border-emerald-900/50' : 'bg-emerald-50/70 border border-emerald-200/60'}">
         <span class="text-[10px] font-bold uppercase tracking-wider {theme === 'dark' ? 'text-emerald-500' : 'text-[#0a4733]/80'}">Project-Based Learning (PBL)</span>
-        <p class="text-xs {theme === 'dark' ? 'text-zinc-300' : 'text-[#0a4733]'}">
-          Developed as a Project-Based Learning initiative to fulfill the course requirements for <strong>CS111: Introduction to Computing (Prelims)</strong> at the University of Science and Technology of Southern Philippines (USTP).
+        <p class="text-[11px] leading-snug {theme === 'dark' ? 'text-zinc-300' : 'text-[#0a4733]'}">
+          Developed for <strong>CS111: Introduction to Computing (Prelims)</strong> at the University of Science and Technology of Southern Philippines (USTP).
         </p>
       </div>
     </div>

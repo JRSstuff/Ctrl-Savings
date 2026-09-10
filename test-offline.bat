@@ -1,4 +1,16 @@
 @echo off
+cd /d "%~dp0"
+
+if not exist "node_modules\" (
+  echo [!] Dependencies missing. Running npm install...
+  call npm install
+  if errorlevel 1 (
+    echo [ERROR] Failed to install dependencies.
+    pause
+    exit /b %errorlevel%
+  )
+)
+
 echo ====================================================
 echo Building the App for Production PWA Offline Testing...
 echo ====================================================

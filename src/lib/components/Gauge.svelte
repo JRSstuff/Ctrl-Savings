@@ -3,7 +3,9 @@
     available = 0.00,
     total = 0.00,
     unit = '₱',
-    theme = 'light'
+    theme = 'light',
+    period = 'weekly',
+    onTogglePeriod = () => {}
   } = $props()
 
   // Calculate percentage for circular progress
@@ -50,18 +52,19 @@
   </svg>
 
   <!-- Center Text Content -->
-  <div class="absolute inset-0 flex flex-col items-center justify-center text-center select-none">
+  <div class="absolute inset-0 flex flex-col items-center justify-center text-center select-none px-4">
+
     <div class="flex items-baseline font-black tracking-tight leading-none {theme === 'dark' ? 'text-white' : 'text-[#0a4733]'}">
       <span class="text-2xl sm:text-3xl font-bold mr-0.5">{unit}</span>
       <span class="text-4xl sm:text-5xl">{integerPart}</span>
       <span class="text-xl sm:text-2xl font-bold">.{decimalPart}</span>
     </div>
     {#if total > 0}
-      <p class="text-xs font-semibold mt-2 tracking-tight {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/85'}">
+      <p class="text-xs font-semibold mt-1.5 tracking-tight {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/85'}">
         available out of {unit}{formattedTotal}
       </p>
     {:else}
-      <p class="text-xs font-semibold mt-2 tracking-tight {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/85'}">
+      <p class="text-xs font-semibold mt-1.5 tracking-tight {theme === 'dark' ? 'text-zinc-400' : 'text-[#0a4733]/85'}">
         Available Cash
       </p>
     {/if}

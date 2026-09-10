@@ -1,8 +1,17 @@
 <script>
   import { fade, scale, slide } from 'svelte/transition'
   import { cubicOut, elasticOut } from 'svelte/easing'
+  import AppIcon from './AppIcon.svelte'
 
-  let { isOpen = false, onClose = () => {}, onAdd = () => {}, theme = 'light', currentBalance = 0 } = $props()
+  let { 
+    isOpen = false, 
+    onClose = () => {}, 
+    onAdd = () => {}, 
+    theme = 'light', 
+    currentBalance = 0,
+    safetyLimit = 0,
+    onUpdateSafetyLimit = () => {}
+  } = $props()
 
   let step = $state('choose') // 'choose', 'form', 'success'
   let mode = $state('expense') // Default to 'expense'
@@ -10,6 +19,8 @@
   let parsedAmount = $derived(parseFloat(amount) || 0)
   let remainingAfterSpend = $derived(currentBalance - parsedAmount)
   let isOverBudget = $derived(mode === 'expense' && parsedAmount > currentBalance && parsedAmount > 0)
+  let isOverSafetyLimit = $derived(mode === 'expense' && safetyLimit > 0 && parsedAmount > safetyLimit)
+  let overrideSafetyLimit = $state(false)
   let title = $state('')
   let category = $state('Food')
   let selectedEmoji = $state('🍔')
@@ -78,6 +89,9 @@
       formError = ''
       showEmojiDrawer = false
       isSubmitting = false
+      overrideSafetyLimit = false
+      showSafetyConfig = false
+      tempSafetyInput = safetyLimit > 0 ? safetyLimit.toString() : ''
     }
   })
 
@@ -139,6 +153,11 @@
     const parsedAmount = parseFloat(amount)
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       formError = 'Please enter a valid amount greater than 0'
+      return
+    }
+
+    if (mode === 'expense' && safetyLimit > 0 && parsedAmount > safetyLimit && !overrideSafetyLimit) {
+      formError = `Exceeds your Safety Spend Limit of ₱${safetyLimit.toFixed(2)}. Please review and check the safety override authorization below to proceed.`
       return
     }
 
@@ -255,8 +274,13 @@
             class="w-full text-left p-6 rounded-2xl border-2 transition-all duration-150 cursor-pointer active:scale-96 flex items-center justify-between group shadow-xl {theme === 'dark' ? 'bg-[#18181b] border-emerald-400 hover:bg-[#222228] shadow-emerald-500/10' : 'bg-white border-[#0a4733] hover:bg-emerald-50/40 shadow-[#0a4733]/15'}"
           >
             <div class="flex items-center gap-4 min-w-0">
-              <div class="w-16 h-16 rounded-2xl flex items-center justify-center font-black text-3xl transition-transform group-hover:scale-110 shadow-md shrink-0 {theme === 'dark' ? 'bg-emerald-500 text-black ring-4 ring-emerald-500/30' : 'bg-[#0a4733] text-white ring-4 ring-[#0a4733]/20'}">
-                💸
+              <div class="w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 shadow-md shrink-0 {theme === 'dark' ? 'bg-emerald-500 text-black ring-4 ring-emerald-500/30' : 'bg-[#0a4733] text-white ring-4 ring-[#0a4733]/20'}">
+                <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+                  <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+                  <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+                  <circle cx="18" cy="14" r="1" fill="currentColor" />
+                </svg>
               </div>
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
@@ -285,8 +309,11 @@
             class="w-full text-left py-3.5 px-4 rounded-xl border transition-all duration-150 cursor-pointer active:scale-97 flex items-center justify-between group {theme === 'dark' ? 'bg-[#121215] border-zinc-800 hover:border-zinc-700 hover:bg-[#18181c]' : 'bg-zinc-50 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-100/80'}"
           >
             <div class="flex items-center gap-3 min-w-0">
-              <div class="w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shrink-0 {theme === 'dark' ? 'bg-zinc-800 text-emerald-400' : 'bg-emerald-100 text-[#0a4733]'}">
-                💰
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center font-black shrink-0 {theme === 'dark' ? 'bg-zinc-800 text-emerald-400' : 'bg-emerald-100 text-[#0a4733]'}">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2v20" />
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
               </div>
               <div class="min-w-0">
                 <h4 class="text-sm font-bold tracking-tight {theme === 'dark' ? 'text-zinc-200' : 'text-zinc-800'}">Add Money (Allowance / Cash In)</h4>
@@ -403,6 +430,26 @@
                 </div>
               {/if}
             </div>
+
+            <!-- Safety Spend Limit Exceeded Warning (Only shown if over limit) -->
+            {#if isOverSafetyLimit}
+              <div class="p-3 rounded-xl border flex flex-col gap-2 transition-all animate-in fade-in {theme === 'dark' ? 'bg-amber-500/10 border-amber-500/40 text-amber-300' : 'bg-amber-50 border-amber-300 text-amber-900'}">
+                <div class="flex items-center gap-1.5 text-[11px] font-extrabold text-amber-500">
+                  <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span>Above Safety Limit (₱{(parsedAmount - safetyLimit).toFixed(2)} over ₱{safetyLimit.toFixed(0)} limit)</span>
+                </div>
+                <label class="flex items-center gap-2 text-xs font-bold cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    bind:checked={overrideSafetyLimit}
+                    class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 accent-emerald-500 cursor-pointer"
+                  />
+                  <span class="{overrideSafetyLimit ? (theme === 'dark' ? 'text-emerald-400' : 'text-[#0a4733]') : 'text-zinc-500 dark:text-zinc-400'}">
+                    I confirm and authorize this large expense
+                  </span>
+                </label>
+              </div>
+            {/if}
           {:else}
             <!-- Mode is Income -->
             <div class="p-3 rounded-xl border flex items-center justify-between text-xs {theme === 'dark' ? 'bg-[#18181b] border-zinc-800' : 'bg-emerald-50/70 border-emerald-200/70'}">
@@ -437,7 +484,7 @@
                   onclick={() => togglePreset(p)}
                   class="cursor-pointer py-2 px-2 rounded-xl border text-xs font-bold transition-all duration-100 flex items-center justify-center gap-1.5 active:scale-95 {activePreset === p.label ? (mode === 'expense' ? (theme === 'dark' ? 'bg-white text-black border-white shadow-md font-black ring-2 ring-emerald-400' : 'bg-[#0a4733] text-white border-[#0a4733] shadow-md font-black ring-2 ring-[#0a4733]/30') : (theme === 'dark' ? 'bg-emerald-500 text-black border-emerald-500 shadow-md font-black ring-2 ring-emerald-400' : 'bg-[#22c55e] text-white border-[#22c55e] shadow-md font-black ring-2 ring-[#22c55e]/30')) : (theme === 'dark' ? 'bg-[#18181b] border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'bg-zinc-100 border-zinc-200 text-zinc-700 hover:bg-zinc-200/80')}"
                 >
-                  <span class="text-sm">{p.icon}</span>
+                  <AppIcon name={p.label} size={15} />
                   <span class="truncate">{p.label}</span>
                 </button>
               {/each}
@@ -508,17 +555,21 @@
             <!-- Spend Button is Commanding & Prominent! -->
             <button
               type="submit"
-              disabled={isSubmitting || !amount}
+              disabled={isSubmitting || !amount || (isOverSafetyLimit && !overrideSafetyLimit)}
               class="w-full py-4.5 px-6 rounded-2xl font-black text-base cursor-pointer transition-all duration-150 active:scale-95 shadow-xl flex items-center justify-center gap-2 disabled:opacity-45 disabled:cursor-not-allowed {mode === 'expense' ? (theme === 'dark' ? 'bg-white hover:bg-zinc-100 text-black shadow-white/10' : 'bg-[#0a4733] hover:bg-[#0c5940] text-white shadow-[#0a4733]/30') : (theme === 'dark' ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-emerald-500/20' : 'bg-[#22c55e] hover:bg-[#1ea951] text-white shadow-[#22c55e]/30')}"
             >
               {#if isSubmitting}
                 <div class="w-5 h-5 border-3 border-current border-t-transparent rounded-full animate-spin"></div>
                 <span>Recording...</span>
               {:else if mode === 'expense'}
-                <span class="text-xl">💸</span>
-                <span>Confirm ₱{amount ? parseFloat(amount).toFixed(2) : '0.00'} Spend</span>
+                {#if isOverSafetyLimit && !overrideSafetyLimit}
+                  <span>⚠️ Authorize Limit Above to Spend</span>
+                {:else}
+                  <svg class="w-5 h-5 stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>Confirm ₱{amount ? parseFloat(amount).toFixed(2) : '0.00'} Spend</span>
+                {/if}
               {:else}
-                <span class="text-xl">💰</span>
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                 <span>Deposit ₱{amount ? parseFloat(amount).toFixed(2) : '0.00'} Cash</span>
               {/if}
             </button>
